@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elite Terminal | Nayro Vex</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #050505; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; }
+        .neon-border { border: 1px solid #00f3ff; box-shadow: 0 0 10px #00f3ff; }
+        .neon-text { color: #00f3ff; text-shadow: 0 0 5px #00f3ff; }
+        .sidebar { background: rgba(10, 10, 10, 0.95); border-left: 1px solid #1a1a1a; }
+        .card { background: #0a0a0a; border: 1px solid #1a1a1a; transition: 0.3s; }
+        .card:hover { border-color: #00f3ff; box-shadow: 0 0 15px rgba(0, 243, 255, 0.2); }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+    <aside class="w-64 sidebar p-5 flex flex-col gap-4 overflow-y-auto hidden md:flex">
+        <h1 class="text-2xl font-bold neon-text mb-6 italic">ELITE V2</h1>
+        <nav class="flex flex-col gap-2">
+            <button class="text-right p-3 hover:bg-zinc-900 rounded-lg transition text-sm">📊 لوحة التحكم</button>
+            <button class="text-right p-3 hover:bg-zinc-900 rounded-lg transition text-sm">⚡ مدرسة SMC / ICT</button>
+            <button class="text-right p-3 hover:bg-zinc-900 rounded-lg transition text-sm">🌊 موجات إليوت</button>
+            <button class="text-right p-3 hover:bg-zinc-900 rounded-lg transition text-sm">📈 عرض السيولة</button>
+            <button class="text-right p-3 hover:bg-zinc-900 rounded-lg transition text-sm text-cyan-400">🤖 Nero AI (المحلل)</button>
+        </nav>
+    </aside>
+    <main class="flex-1 flex flex-col">
+        <header class="h-16 border-b border-zinc-800 flex items-center justify-between px-6 bg-zinc-950">
+            <div class="flex items-center gap-4">
+                <span class="neon-text font-mono font-bold">BTC/USDT</span>
+                <span id="btc-price" class="text-green-400 font-mono">جاري الاتصال...</span>
+            </div>
+            <div class="font-bold tracking-widest text-zinc-400">NAYRO VEX</div>
+        </header>
+        <section class="p-6 overflow-y-auto">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="card p-5 rounded-xl neon-border">
+                    <h3 class="neon-text font-bold mb-4">مراقب السيولة</h3>
+                    <p class="text-sm text-zinc-500">تتبع دخول السيولة الذكية لحظياً.</p>
+                </div>
+                <div class="card p-5 rounded-xl">
+                    <h3 class="text-zinc-300 font-bold mb-4">توقعات Nero AI</h3>
+                    <p class="text-xs text-zinc-500 italic">"ابحث عن Order Block شرائي عند منطقة الـ Discount."</p>
+                </div>
+            </div>
+            <div class="mt-8 h-80 bg-zinc-900/50 rounded-2xl flex items-center justify-center border border-dashed border-zinc-700">
+                <p class="text-zinc-600 font-mono text-sm">TradingView Integration Soon...</p>
+            </div>
+        </section>
+    </main>
+    <script>
+        async function updateMarket() {
+            try {
+                const response = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
+                const data = await response.json();
+                document.getElementById('btc-price').innerText = "$" + parseFloat(data.price).toLocaleString();
+            } catch (err) { document.getElementById('btc-price').innerText = "Error"; }
+        }
+        setInterval(updateMarket, 2000);
+        updateMarket();
+    </script>
+</body>
+</html>
