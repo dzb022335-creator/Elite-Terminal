@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios'); // مكتبة لجلب البيانات من الـ API خارجي
+const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// قائمة بأسماء العملات الشائعة لأن CoinGecko يطلب الاسم الكامل للعملة
+// قائمة بأسماء العملات الشائعة للربط مع CoinGecko
 const coinMap = {
   btc: "bitcoin",
   eth: "ethereum",
@@ -22,12 +22,14 @@ const coinMap = {
 app.get('/api/analyze/:symbol', async (req, res) => {
   const rawSymbol = req.params.symbol;
 
+  // 1. التحقق من الفراغات
   if (!rawSymbol || rawSymbol.trim() === '') {
     return res.status(400).json({ success: false, message: 'يرجى كتابة رمز العملة' });
   }
 
   const symbol = rawSymbol.trim().toLowerCase();
 
+  // 2. التحقق من الحروف فقط (حمايتك الخاصة)
   if (!/^[a-zA-Z]+$/.test(symbol)) {
     return res.status(400).json({ success: false, message: 'رمز العملة يجب أن يحتوي على حروف فقط' });
   }
@@ -45,11 +47,11 @@ app.get('/api/analyze/:symbol', async (req, res) => {
     const currentPrice = data.market_data.current_price.usd;
     const priceChange24h = data.market_data.price_change_percentage_24h;
 
-    // معادلة بسيطة للتحليل بناءً على حركة الـ 24 ساعة الماضية
     let hasOpportunity = false;
     let reason = "";
     let entry = null, stopLoss = null, target = null, successRate = null;
 
+    // معادلة بسيطة حقيقية: إذا هبط السعر أكثر من 2% نعتبرها فرصة ارتداد
     if (priceChange24h < -2) {
       hasOpportunity = true;
       reason = `السعر هبط بنسبة ${priceChange24h.toFixed(2)}% في الـ 24 ساعة الأخيرة. يبدو أن العملة في منطقة دعم جيدة للشراء الارتدادي.`;
