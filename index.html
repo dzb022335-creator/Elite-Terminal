@@ -13,6 +13,9 @@
             --danger-color: #ff3366;
             --success-color: #00ff88;
             --neutral-border: rgba(0, 255, 204, 0.2);
+            /* أضفنا متغيرات الألوان الزرقاء للشات لتوحيد التصميم */
+            --chat-primary: #00d2ff;
+            --chat-secondary: #0055ff;
         }
         body {
             background-color: var(--bg-color);
@@ -23,6 +26,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            min-height: 100vh; /* لضمان ملء الشاشة */
         }
         .container {
             width: 100%;
@@ -33,6 +37,7 @@
             box-shadow: 0 5px 15px rgba(0, 255, 204, 0.1);
             border: 1px solid var(--neutral-border);
             transition: all 0.5s ease;
+            margin-bottom: 20px; /* مسافة أسفل الحاوية */
         }
         h1 {
             text-align: center;
@@ -105,6 +110,15 @@
         @media all and (display-mode: standalone) {
             body { padding-top: 40px; }
         }
+
+        /* تنسيقات إضافية لضمان ظهور الشات بشكل ممتاز */
+        #chat-container {
+            width: 100%;
+            max-width: 500px;
+            /* لضمان عدم تداخل الشات مع العناصر الأخرى */
+            position: relative; 
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
@@ -128,6 +142,9 @@
             <p>🛑 وقف الخسارة: <span id="stopLoss"></span></p>
         </div>
     </div>
+
+    <div id="chat-container">
+        </div>
 
     <script>
         const API_URL = window.location.origin;
@@ -183,6 +200,30 @@
                 console.error(error);
             }
         }
+    </script>
+    
+    <script>
+        // 1. دالة لجلب وعرض واجهة الشات (chat.html)
+        async function loadChatInterface() {
+            try {
+                const response = await fetch('chat.html');
+                if (!response.ok) throw new Error('فشل تحميل ملف الشات');
+                const chatHtml = await response.text();
+                document.getElementById('chat-container').innerHTML = chatHtml;
+                
+                // 2. بعد تحميل الواجهة، نقوم باستدعاء ملف الحركة (chat.js)
+                const scriptElement = document.createElement('script');
+                scriptElement.src = 'chat.js';
+                document.body.appendChild(scriptElement);
+                
+            } catch (error) {
+                console.error("خطأ في تحميل الشات:", error);
+                document.getElementById('chat-container').innerHTML = '<p style="color: red; text-align: center;">⚠️ عذراً، تعذر تحميل واجهة المحادثة.</p>';
+            }
+        }
+
+        // تشغيل دالة التحميل بمجرد تحميل الصفحة
+        window.addEventListener('DOMContentLoaded', loadChatInterface);
     </script>
 </body>
 </html>
