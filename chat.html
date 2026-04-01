@@ -1,0 +1,22 @@
+<div class="elite-chat-container" style="background: #09090d; border: 1px solid #0055ff; border-radius: 12px; padding: 15px; margin-top: 20px; box-shadow: 0 0 10px rgba(0, 85, 255, 0.2); font-family: sans-serif;">
+    
+    <div style="color: #00d2ff; font-weight: bold; margin-bottom: 10px; font-size: 14px; text-align: right;">
+        🤖 مناقشة مفتوحة مع AI
+    </div>
+
+    <div id="chat-messages" style="height: 250px; overflow-y: auto; margin-bottom: 15px; padding: 10px; display: flex; flex-direction: column; gap: 10px; background: #050507; border-radius: 8px; border: 1px solid #1a1a24;">
+        
+        <div style="align-self: flex-start; background: #1a1a24; color: #00d2ff; padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; text-align: right; border-left: 3px solid #0055ff; line-height: 1.5;">
+            مرحباً بك! أنا جاهز لمناقشة أي شيء تريده بخصوص التحليل أو أي موضوع آخر. اسألني بكل حرية!
+        </div>
+        
+    </div>
+    
+    <div style="display: flex; gap: 10px;">
+        <input type="text" id="user-chat-input" placeholder="اكتب رسالتك هنا..." style="flex: 1; background: #1a1a24; border: 1px solid #0055ff; color: #fff; padding: 12px; border-radius: 8px; outline: none; font-size: 13px; text-align: right;" onkeypress="if(event.key === 'Enter') sendMessageToAI()">
+        
+        <button onclick="sendMessageToAI()" style="background: #00d2ff; color: #000; border: none; padding: 0 20px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; transition: 0.3s;" onmouseover="this.style.background='#00bfff'" onmouseout="this.style.background='#00d2ff'">
+            إرسال
+        </button>
+    </div>
+</div>
