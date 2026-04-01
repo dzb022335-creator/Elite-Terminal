@@ -1,82 +1,87 @@
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios'); // مكتبة لجلب البيانات من الـ API خارجي
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
 
-const mockData = {
-  btc: {
-    symbol: "BTC",
-    hasOpportunity: true,
-    reason: "السعر قريب من منطقة دعم قوية على الفريم اليومي مع زيادة ملحوظة في حجم التداول.",
-    entry: 84200,
-    stopLoss: 83100,
-    target: 86500,
-    successRate: 74
-  },
-  sol: {
-    symbol: "SOL",
-    hasOpportunity: true,
-    reason: "اختراق نموذج مثلث صاعد على فريم 4 ساعات ومؤشر RSI إيجابي.",
-    entry: 145.5,
-    stopLoss: 140.0,
-    target: 158.0,
-    successRate: 68
-  },
-  eth: {
-    symbol: "ETH",
-    hasOpportunity: false,
-    reason: "السعر يقترب من مقاومة تاريخية قوية والزخم الحالي ضعيف، يفضل الانتظار.",
-    entry: null,
-    stopLoss: null,
-    target: null,
-    successRate: null
-  }
+// قائمة بأسماء العملات الشائعة لأن CoinGecko يطلب الاسم الكامل للعملة
+const coinMap = {
+  btc: "bitcoin",
+  eth: "ethereum",
+  sol: "solana",
+  doge: "dogecoin",
+  ada: "cardano",
+  xrp: "ripple",
+  bnb: "binancecoin"
 };
 
-const defaultResponse = (symbol) => ({
-  symbol: symbol.toUpperCase(),
-  hasOpportunity: false,
-  reason: "السيولة الحالية ضعيفة في هذه العملة ولا يوجد اتجاه واضح لتحقيق صفقة آمنة.",
-  entry: null,
-  stopLoss: null,
-  target: null,
-  successRate: null
-});
-
-app.get('/api/analyze/:symbol', (req, res) => {
+app.get('/api/analyze/:symbol', async (req, res) => {
   const rawSymbol = req.params.symbol;
 
   if (!rawSymbol || rawSymbol.trim() === '') {
-    return res.status(400).json({
-      success: false,
-      message: 'يرجى كتابة رمز العملة'
-    });
+    return res.status(400).json({ success: false, message: 'يرجى كتابة رمز العملة' });
   }
 
   const symbol = rawSymbol.trim().toLowerCase();
 
-  // التعديل الجديد: منع الأرقام والرموز الغريبة
   if (!/^[a-zA-Z]+$/.test(symbol)) {
-    return res.status(400).json({
-      success: false,
-      message: 'رمز العملة يجب أن يحتوي على حروف فقط'
-    });
+    return res.status(400).json({ success: false, message: 'رمز العملة يجب أن يحتوي على حروف فقط' });
   }
 
-  setTimeout(() => {
-    const analysis = mockData[symbol] || defaultResponse(symbol);
+  const coinId = coinMap[symbol];
+  if (!coinId) {
+    return res.status(400).json({ success: false, message: 'هذه العملة غير مدعومة حاليًا في النسخة التجريبية. جرب btc أو sol أو eth' });
+  }
+
+  try {
+    // جلب البيانات الحقيقية من CoinGecko
+    const response = await axios.get(`https://api.coingecko.com/api/v3/coins/${coinId}`);
+    const data = response.data;
+
+    const currentPrice = data.market_data.current_price.usd;
+    const priceChange24h = data.market_data.price_change_percentage_24h;
+
+    // معادلة بسيطة للتحليل بناءً على حركة الـ 24 ساعة الماضية
+    let hasOpportunity = false;
+    let reason = "";
+    let entry = null, stopLoss = null, target = null, successRate = null;
+
+    if (priceChange24h < -2) {
+      hasOpportunity = true;
+      reason = `السعر هبط بنسبة ${priceChange24h.toFixed(2)}% في الـ 24 ساعة الأخيرة. يبدو أن العملة في منطقة دعم جيدة للشراء الارتدادي.`;
+      
+      entry = currentPrice;
+      stopLoss = currentPrice * 0.96; // وقف خسارة 4%
+      target = currentPrice * 1.08;   // هدف 8%
+      successRate = 65;
+    } else {
+      hasOpportunity = false;
+      reason = `العملة صعدت بالفعل بنسبة ${priceChange24h.toFixed(2)}% أو تتحرك بشكل عرضي، الدخول هنا قد يكون عالي المخاطرة.`;
+    }
 
     res.json({
       success: true,
-      data: analysis
+      data: {
+        symbol: symbol.toUpperCase(),
+        hasOpportunity,
+        reason,
+        entry: entry ? entry.toFixed(2) : null,
+        stopLoss: stopLoss ? stopLoss.toFixed(2) : null,
+        target: target ? target.toFixed(2) : null,
+        successRate
+      }
     });
-  }, 1000);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'حدث خطأ أثناء جلب البيانات الحقيقية من السوق.' });
+  }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
