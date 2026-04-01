@@ -32,7 +32,7 @@
             border-radius: 15px;
             box-shadow: 0 5px 15px rgba(0, 255, 204, 0.1);
             border: 1px solid var(--neutral-border);
-            transition: border-color 0.5s ease, box-shadow 0.5s ease;
+            transition: all 0.5s ease;
         }
         h1 {
             text-align: center;
@@ -90,14 +90,8 @@
             overflow-y: auto;
             padding-right: 5px;
         }
-        /* تحسين شكل شريط السكرول للنصوص الطويلة */
-        #aiReason::-webkit-scrollbar {
-            width: 5px;
-        }
-        #aiReason::-webkit-scrollbar-thumb {
-            background-color: #333;
-            border-radius: 10px;
-        }
+        #aiReason::-webkit-scrollbar { width: 5px; }
+        #aiReason::-webkit-scrollbar-thumb { background-color: #333; border-radius: 10px; }
         .loading {
             text-align: center;
             color: var(--accent-color);
@@ -136,18 +130,12 @@
     </div>
 
     <script>
-        const API_URL = "https://elite-terminal.vercel.app";
+        const API_URL = window.location.origin;
 
         const symbolInput = document.getElementById('symbolInput');
         const analyzeBtn = document.getElementById('analyzeBtn');
 
-        // ميزة 5: الاستماع لزر Enter
-        symbolInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                analyze();
-            }
-        });
-
+        symbolInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') analyze(); });
         analyzeBtn.addEventListener('click', analyze);
 
         async function analyze() {
@@ -156,21 +144,16 @@
             const resultBox = document.getElementById('resultBox');
             const mainContainer = document.getElementById('mainContainer');
             
-            if(!symbol) {
-                alert('الرجاء إدخال رمز العملة أولاً!');
-                return;
-            }
+            if(!symbol) { alert('الرجاء إدخال رمز العملة أولاً!'); return; }
 
             loading.style.display = 'block';
             resultBox.style.display = 'none';
-            // إعادة لون الحواف للوضع الطبيعي أثناء التحميل
             mainContainer.style.borderColor = "rgba(0, 255, 204, 0.2)";
             mainContainer.style.boxShadow = "0 5px 15px rgba(0, 255, 204, 0.1)";
 
             try {
                 const response = await fetch(`${API_URL}/api/analyze/${symbol}`);
                 const resData = await response.json();
-
                 loading.style.display = 'none';
 
                 if(resData.success) {
@@ -178,12 +161,10 @@
                     document.getElementById('coinTitle').innerText = `تحليل عملة ${data.symbol}`;
                     document.getElementById('aiReason').innerText = data.reason;
                     
-                    // ميزة 2: معالجة القيم الفارغة (null) بذكاء
                     document.getElementById('entryPrice').innerHTML = data.entry ? `<span class="success">${data.entry} $</span>` : "<span>-</span>";
                     document.getElementById('targetPrice').innerHTML = data.target ? `<span class="success">${data.target} $</span>` : "<span>-</span>";
                     document.getElementById('stopLoss').innerHTML = data.stopLoss ? `<span class="danger">${data.stopLoss} $</span>` : "<span>-</span>";
                     
-                    // ميزة 3: تغيير لون حدود الـ Card حسب قوة الفرصة
                     if (data.hasOpportunity) {
                         mainContainer.style.borderColor = "var(--success-color)";
                         mainContainer.style.boxShadow = "0 5px 20px rgba(0, 255, 136, 0.2)";
@@ -198,7 +179,7 @@
                 }
             } catch (error) {
                 loading.style.display = 'none';
-                alert('حدث خطأ أثناء الاتصال بالسيرفر. تأكد من أن السيرفر يعمل.');
+                alert('حدث خطأ أثناء الاتصال بالسيرفر.');
                 console.error(error);
             }
         }
