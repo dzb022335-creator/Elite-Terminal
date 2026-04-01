@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NayroVex Elite Terminal</title>
+    <style>
+        :root {
+            --bg-color: #0a0a0f;
+            --card-bg: #14141f;
+            --accent-color: #00ffcc;
+            --text-color: #e0e0e6;
+            --danger-color: #ff3366;
+            --success-color: #00ff88;
+            --neutral-border: rgba(0, 255, 204, 0.2);
+        }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 255, 204, 0.1);
+            border: 1px solid var(--neutral-border);
+            transition: all 0.5s ease;
+        }
+        h1 {
+            text-align: center;
+            color: var(--accent-color);
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input {
+            flex: 1;
+            background: #0a0a0f;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        input:focus {
+            border-color: var(--accent-color);
+        }
+        button {
+            background: var(--accent-color);
+            color: #000;
+            border: none;
+            padding: 0 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        button:hover {
+            opacity: 0.9;
+            box-shadow: 0 0 10px var(--accent-color);
+        }
+        .result-box {
+            background: #0a0a0f;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            display: none;
+            border: 1px solid #222;
+        }
+        #aiReason {
+            line-height: 1.6;
+            max-height: 150px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+        #aiReason::-webkit-scrollbar { width: 5px; }
+        #aiReason::-webkit-scrollbar-thumb { background-color: #333; border-radius: 10px; }
+        .loading {
+            text-align: center;
+            color: var(--accent-color);
+            display: none;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .success { color: var(--success-color); font-weight: bold;}
+        .danger { color: var(--danger-color); font-weight: bold;}
+        
+        @media all and (display-mode: standalone) {
+            body { padding-top: 40px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container" id="mainContainer">
+        <h1>Elite Terminal AI</h1>
+        
+        <div class="input-group">
+            <input type="text" id="symbolInput" placeholder="أدخل رمز العملة (مثال: btc, sol)">
+            <button id="analyzeBtn">تحليل</button>
+        </div>
+
+        <div id="loading" class="loading">جاري استشارة الذكاء الاصطناعي...</div>
+
+        <div id="resultBox" class="result-box">
+            <h3 id="coinTitle" style="color: var(--accent-color); margin-top: 0;"></h3>
+            <div id="aiReason"></div>
+            <hr style="border-color: #222;">
+            <p>💰 سعر الدخول المقترح: <span id="entryPrice"></span></p>
+            <p>🎯 الهدف (Target): <span id="targetPrice"></span></p>
+            <p>🛑 وقف الخسارة: <span id="stopLoss"></span></p>
+        </div>
+    </div>
+
+    <script>
+        // ميزة استخدام نفس السيرفر لطلب الـ API تلقائيًا
+        const API_URL = window.location.origin;
+
+        const symbolInput = document.getElementById('symbolInput');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+
+        symbolInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') analyze(); });
+        analyzeBtn.addEventListener('click', analyze);
+
+        async function analyze() {
+            const symbol = symbolInput.value.trim();
+            const loading = document.getElementById('loading');
+            const resultBox = document.getElementById('resultBox');
+            const mainContainer = document.getElementById('mainContainer');
+            
+            if(!symbol) { alert('الرجاء إدخال رمز العملة أولاً!'); return; }
+
+            loading.style.display = 'block';
+            resultBox.style.display = 'none';
+            mainContainer.style.borderColor = "rgba(0, 255, 204, 0.2)";
+            mainContainer.style.boxShadow = "0 5px 15px rgba(0, 255, 204, 0.1)";
+
+            try {
+                const response = await fetch(`${API_URL}/api/analyze/${symbol}`);
+                const resData = await response.json();
+                loading.style.display = 'none';
+
+                if(resData.success) {
+                    const data = resData.data;
+                    document.getElementById('coinTitle').innerText = `تحليل عملة ${data.symbol}`;
+                    document.getElementById('aiReason').innerText = data.reason;
+                    
+                    document.getElementById('entryPrice').innerHTML = data.entry ? `<span class="success">${data.entry} $</span>` : "<span>-</span>";
+                    document.getElementById('targetPrice').innerHTML = data.target ? `<span class="success">${data.target} $</span>` : "<span>-</span>";
+                    document.getElementById('stopLoss').innerHTML = data.stopLoss ? `<span class="danger">${data.stopLoss} $</span>` : "<span>-</span>";
+                    
+                    if (data.hasOpportunity) {
+                        mainContainer.style.borderColor = "var(--success-color)";
+                        mainContainer.style.boxShadow = "0 5px 20px rgba(0, 255, 136, 0.2)";
+                    } else {
+                        mainContainer.style.borderColor = "var(--danger-color)";
+                        mainContainer.style.boxShadow = "0 5px 20px rgba(255, 51, 102, 0.15)";
+                    }
+
+                    resultBox.style.display = 'block';
+                } else {
+                    alert('خطأ: ' + resData.message);
+                }
+            } catch (error) {
+                loading.style.display = 'none';
+                alert('حدث خطأ أثناء الاتصال بالسيرفر.');
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html>
