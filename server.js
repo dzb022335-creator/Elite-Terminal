@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// 🌟 ميزتك المقترحة: تتبع الطلبات (Logging Middleware)
+// 🌟 تتبع الطلبات (Logging Middleware)
 app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     next();
@@ -22,12 +22,45 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 🌟 دالتك الذكية المعدلة لتنسيق الأرقام العشرية بشكل مثالي
+// 🌟 مسار الدردشة المفتوحة مع AI (الجديد لربط الشات)
+app.post('/api/chat', async (req, res) => {
+    const { prompt } = req.body;
+    const geminiApiKey = process.env.SECRET_KEY;
+
+    if (!prompt) {
+        return res.status(400).json({ success: false, message: 'الرسالة فارغة' });
+    }
+
+    if (!geminiApiKey) {
+        return res.json({ reply: '⚠️ عذراً، لم يتم إعداد مفتاح API الخاص بـ Gemini في السيرفر بعد.' });
+    }
+
+    try {
+        const aiResponse = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+            {
+                contents: [{
+                    parts: [{ text: prompt }]
+                }]
+            },
+            { timeout: 10000 }
+        );
+
+        const reply = aiResponse.data.candidates[0].content.parts[0].text;
+        res.json({ reply: reply });
+
+    } catch (error) {
+        console.error("Chat API Error:", error.message);
+        res.status(500).json({ reply: '⚠️ حدث خطأ أثناء محاولة التحدث مع الذكاء الاصطناعي.' });
+    }
+});
+
+// 🌟 دالة تنسيق الأرقام العشرية
 const formatPrice = (price) => {
   if (price >= 1000) return price.toFixed(2);
   if (price >= 1) return price.toFixed(4);
-  if (price >= 0.01) return price.toFixed(6); // للعملات المتوسطة مثل DOGE و XRP
-  return price.toFixed(8); // لعملات الميم ذات الأصفار الكثيرة
+  if (price >= 0.01) return price.toFixed(6); 
+  return price.toFixed(8); 
 };
 
 // 🌟 ذاكرة التخزين المؤقت (Cache)
@@ -44,7 +77,7 @@ app.get('/api/analyze/:symbol', async (req, res) => {
     return res.status(400).json({ success: false, message: 'رمز العملة يجب أن يحتوي على حروف وأرقام فقط' });
   }
 
-  // فحص الكاش: إذا طُلبت نفس العملة خلال أقل من 60 ثانية، يُرد فوراً بدون استدعاء API
+  // فحص الكاش
   if (
     cache[symbol] &&
     Date.now() - cache[symbol].timestamp < 60000
@@ -54,11 +87,9 @@ app.get('/api/analyze/:symbol', async (req, res) => {
   }
 
   try {
-    // 🔍 البحث عن معرف العملة الفعلي في CoinGecko بناءً على الرمز المكتوب
     const searchResponse = await axios.get(`https://api.coingecko.com/api/v3/search?query=${symbol}`);
     const coinsList = searchResponse.data.coins;
 
-    // إعطاء الأولوية للعملات المشهورة التي تملك Rank
     const matchedCoin = coinsList.find(
       c => c.symbol.toLowerCase() === symbol && c.market_cap_rank
     ) || coinsList.find(
@@ -71,7 +102,6 @@ app.get('/api/analyze/:symbol', async (req, res) => {
 
     const coinId = matchedCoin.id;
 
-    // 🌟 التعديل الجديد: جلب بيانات العملة مع مهلة 8 ثوانٍ لتجنب التعليق
     const response = await axios.get(
       `https://api.coingecko.com/api/v3/coins/${coinId}`,
       { timeout: 8000 }
@@ -80,7 +110,6 @@ app.get('/api/analyze/:symbol', async (req, res) => {
 
     const currentPrice = data.market_data.current_price.usd;
 
-    // التحقق الآمن لأسعار الصفر المطلق في العملات الرخيصة
     if (currentPrice === undefined || currentPrice === null) {
       return res.status(404).json({
         success: false,
@@ -88,7 +117,6 @@ app.get('/api/analyze/:symbol', async (req, res) => {
       });
     }
 
-    // التعامل الآمن مع غياب أعلى وأدنى سعر في 24 ساعة
     const priceChange24h = data.market_data.price_change_percentage_24h || 0;
     const high24h = data.market_data.high_24h?.usd || currentPrice;
     const low24h = data.market_data.low_24h?.usd || currentPrice;
@@ -98,7 +126,6 @@ app.get('/api/analyze/:symbol', async (req, res) => {
 
     if (geminiApiKey) {
       try {
-        // إضافة مهلة 8 ثوانٍ لطلب Gemini لمنع البطء
         const aiResponse = await axios.post(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
           {
@@ -121,7 +148,6 @@ app.get('/api/analyze/:symbol', async (req, res) => {
       }
     }
 
-    // التحليل البديل التلقائي في حال فشل الذكاء الاصطناعي أو تأخره
     if (!aiReason) {
       if (priceChange24h < -2) {
         aiReason = `[تحليل رقمي تلقائي]: العملة هبطت بنسبة ${priceChange24h.toFixed(2)}% محققة قاعاً عند ${formatPrice(low24h)}$ اليوم. هذا الهبوط قد يمثل فرصة ارتداد جيدة للمشترين بشرط الحفاظ على مناطق الدعم.`;
@@ -135,7 +161,6 @@ app.get('/api/analyze/:symbol', async (req, res) => {
     let stopLoss = currentPrice * 0.96;
     let target = currentPrice * 1.08;
 
-    // تجميع النتيجة النهائية لتخزينها في الكاش
     const result = {
       success: true,
       data: {
@@ -149,7 +174,6 @@ app.get('/api/analyze/:symbol', async (req, res) => {
       }
     };
 
-    // حفظ البيانات في الكاش مع توقيت الحفظ
     cache[symbol] = {
       data: result,
       timestamp: Date.now()
@@ -158,7 +182,6 @@ app.get('/api/analyze/:symbol', async (req, res) => {
     res.json(result);
 
   } catch (error) {
-    // 🌟 التعديل الجديد: إرسال رد واضح في حالة حظر CoinGecko للطلبات الكثيرة (Rate Limit)
     if (error.response?.status === 429) {
       return res.status(429).json({
         success: false,
