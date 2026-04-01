@@ -13,9 +13,8 @@
             --danger-color: #ff3366;
             --success-color: #00ff88;
             --neutral-border: rgba(0, 255, 204, 0.2);
-            /* أضفنا متغيرات الألوان الزرقاء للشات لتوحيد التصميم */
-            --chat-primary: #00d2ff;
-            --chat-secondary: #0055ff;
+            --chat-primary: #0055ff;
+            --chat-text: #00d2ff;
         }
         body {
             background-color: var(--bg-color);
@@ -26,7 +25,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-height: 100vh; /* لضمان ملء الشاشة */
+            min-height: 100vh;
         }
         .container {
             width: 100%;
@@ -37,7 +36,7 @@
             box-shadow: 0 5px 15px rgba(0, 255, 204, 0.1);
             border: 1px solid var(--neutral-border);
             transition: all 0.5s ease;
-            margin-bottom: 20px; /* مسافة أسفل الحاوية */
+            margin-bottom: 20px;
         }
         h1 {
             text-align: center;
@@ -107,17 +106,36 @@
         .success { color: var(--success-color); font-weight: bold;}
         .danger { color: var(--danger-color); font-weight: bold;}
         
-        @media all and (display-mode: standalone) {
-            body { padding-top: 40px; }
-        }
-
-        /* تنسيقات إضافية لضمان ظهور الشات بشكل ممتاز */
+        /* 📥 تنسيق صندوق الشات المدمج */
         #chat-container {
             width: 100%;
             max-width: 500px;
-            /* لضمان عدم تداخل الشات مع العناصر الأخرى */
-            position: relative; 
-            z-index: 10;
+            background: var(--card-bg);
+            border-radius: 15px;
+            border: 1px solid var(--neutral-border);
+            display: flex;
+            flex-direction: column;
+            height: 350px;
+            box-shadow: 0 5px 15px rgba(0, 255, 204, 0.05);
+        }
+        #chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .chat-input-group {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 0 0 15px 15px;
+        }
+        
+        @media all and (display-mode: standalone) {
+            body { padding-top: 40px; }
         }
     </style>
 </head>
@@ -144,11 +162,22 @@
     </div>
 
     <div id="chat-container">
+        <div id="chat-messages">
+            <div style="align-self: flex-start; background: #1a1a24; color: var(--chat-text); padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; text-align: right; border-left: 3px solid var(--chat-primary);">
+                أهلاً بك في المحادثة المباشرة! اسألني أي شيء أو اطلب "تحليل BTC" مثلاً.
+            </div>
         </div>
+        
+        <div class="chat-input-group">
+            <input type="text" id="user-chat-input" placeholder="تحدث مع الذكاء الاصطناعي..." style="font-size: 14px; padding: 10px;">
+            <button onclick="sendMessageToAI()" style="padding: 0 15px; margin-right: 8px; background: var(--chat-primary); color: #fff;">إرسال</button>
+        </div>
+    </div>
 
     <script>
         const API_URL = window.location.origin;
 
+        // --- أولاً: أكواد منصة التحليل الأساسية ---
         const symbolInput = document.getElementById('symbolInput');
         const analyzeBtn = document.getElementById('analyzeBtn');
 
@@ -197,33 +226,86 @@
             } catch (error) {
                 loading.style.display = 'none';
                 alert('حدث خطأ أثناء الاتصال بالسيرفر.');
-                console.error(error);
-            }
-        }
-    </script>
-    
-    <script>
-        // 1. دالة لجلب وعرض واجهة الشات (chat.html)
-        async function loadChatInterface() {
-            try {
-                const response = await fetch('chat.html');
-                if (!response.ok) throw new Error('فشل تحميل ملف الشات');
-                const chatHtml = await response.text();
-                document.getElementById('chat-container').innerHTML = chatHtml;
-                
-                // 2. بعد تحميل الواجهة، نقوم باستدعاء ملف الحركة (chat.js)
-                const scriptElement = document.createElement('script');
-                scriptElement.src = 'chat.js';
-                document.body.appendChild(scriptElement);
-                
-            } catch (error) {
-                console.error("خطأ في تحميل الشات:", error);
-                document.getElementById('chat-container').innerHTML = '<p style="color: red; text-align: center;">⚠️ عذراً، تعذر تحميل واجهة المحادثة.</p>';
             }
         }
 
-        // تشغيل دالة التحميل بمجرد تحميل الصفحة
-        window.addEventListener('DOMContentLoaded', loadChatInterface);
+        // --- ثانياً: أكواد الشات الأزرق المدمج ---
+        function addMessage(text, isUser = false) {
+            const chatMessages = document.getElementById('chat-messages');
+            chatMessages.innerHTML += `
+                <div style="
+                    align-self: ${isUser ? 'flex-end' : 'flex-start'};
+                    background: ${isUser ? '#0055ff' : '#1a1a24'};
+                    color: ${isUser ? '#fff' : '#00d2ff'};
+                    padding: 8px 12px; 
+                    border-radius: 8px; 
+                    max-width: 80%;
+                    font-size: 13px; 
+                    text-align: right; 
+                    line-height: 1.5;
+                    border-left: ${isUser ? 'none' : '3px solid #0055ff'};
+                ">
+                    ${text}
+                </div>
+            `;
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        async function sendMessageToAI() {
+            const inputField = document.getElementById('user-chat-input');
+            const messageText = inputField.value.trim();
+            
+            if (messageText === '') return;
+
+            addMessage(messageText, true);
+            inputField.value = '';
+
+            const chatMessages = document.getElementById('chat-messages');
+            const loadingId = 'loading-' + Date.now();
+            chatMessages.innerHTML += `
+                <div id="${loadingId}" style="align-self: flex-start; background: #1a1a24; color: #00d2ff; padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; text-align: right; border-left: 3px solid #0055ff;">
+                    جاري التفكير... ⏳
+                </div>
+            `;
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            try {
+                let response;
+                const coinMatch = messageText.match(/تحليل\s+(\w+)/i);
+                
+                if (coinMatch) {
+                    const symbol = coinMatch[1].toUpperCase();
+                    response = await fetch(`/api/analyze/${symbol}`);
+                    const data = await response.json();
+                    
+                    document.getElementById(loadingId)?.remove();
+                    addMessage(`📊 **تحليل عملة ${symbol}**:\n${data.data.reason}`);
+                } else {
+                    // الاتصال بمسار الشات العام في السيرفر
+                    response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prompt: messageText })
+                    });
+                    const data = await response.json();
+                    
+                    document.getElementById(loadingId)?.remove();
+                    addMessage(data.reply);
+                }
+
+            } catch (error) {
+                document.getElementById(loadingId)?.remove();
+                addMessage("⚠️ حدث خطأ في الاتصال بالسيرفر! تأكد من إعدادات الـ API.", false);
+            }
+        }
+
+        // دعم الضغط على Enter
+        document.getElementById('user-chat-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessageToAI();
+            }
+        });
     </script>
 </body>
 </html>
