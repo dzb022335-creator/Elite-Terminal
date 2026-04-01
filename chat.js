@@ -62,8 +62,8 @@ async function sendMessageToAI() {
             // عرض نتيجة التحليل
             addMessage(`📊 **تحليل عملة ${symbol}**:\n${data.data.reason}`);
         } else {
-            // إذا كان كلاماً عاماً، نرسله للـ API المفتوح
-            response = await fetch('https://your-api-link.com/chat', {
+            // 🌟 التعديل هنا: تم توجيه الطلب للمسار الصحيح في سيرفرك
+            response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt: messageText })
