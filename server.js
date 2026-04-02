@@ -22,6 +22,7 @@ setInterval(() => {
     }
 }, 1000 * 60 * 5);
 
+// حل مشكلة Cannot GET / بعرض الواجهة مباشرة في الصفحة الرئيسية
 app.get('/', (req, res) => {
     res.send(`
     <!DOCTYPE html>
@@ -183,9 +184,9 @@ app.get('/', (req, res) => {
                 if (role === 'user' && imageBase64) {
                     const img = document.createElement('img');
                     img.src = imageBase64;
-                    img.style.maxWidth = '100px'; img.style.borderRadius = '5px';
+                    img.style.maxWidth = '150px'; img.style.borderRadius = '5px';
                     img.style.marginBottom = '5px'; img.style.display = 'block';
-                    img.onload = scrollToBottom; // النزول لأسفل بعد اكتمال الصورة
+                    img.onload = scrollToBottom; 
                     msgBox.appendChild(img);
                 }
 
@@ -222,7 +223,7 @@ app.get('/', (req, res) => {
                         let width = img.width;
                         let height = img.height;
 
-                        const max_size = 1000; // رفع الحجم الأقصى قليلاً لدقة أفضل
+                        const max_size = 800; // خفضنا الأبعاد قليلاً لتسريع الاستجابة على Vercel
                         if (width > height && width > max_size) { height *= max_size / width; width = max_size; }
                         else if (height > max_size) { width *= max_size / height; height = max_size; }
 
@@ -230,21 +231,9 @@ app.get('/', (req, res) => {
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
 
-                        // تحويل تلقائي لـ JPEG وتقليص الجودة لـ 70% لتقليل الوزن
-                        currentBase64Image = canvas.toDataURL('image/jpeg', 0.7);
+                        // ضغط الجودة لـ 60% لتقليل الوزن وضمان تخطي مهلة Vercel
+                        currentBase64Image = canvas.toDataURL('image/jpeg', 0.6);
                         
-                        // فحص الحجم في الواجهة
-                        const sizeInMB = (currentBase64Image.length * (3/4)) / (1024 * 1024);
-                        const warningSpan = document.getElementById('image-size-warning');
-                        
-                        if (sizeInMB > 3) {
-                            warningSpan.innerText = "⚠️ حجم الصورة ضخم حتى بعد الضغط!";
-                            warningSpan.style.color = "red";
-                        } else {
-                            warningSpan.innerText = "تم الضغط والتحويل لـ JPEG تلقائياً ⚡";
-                            warningSpan.style.color = "#aaa";
-                        }
-
                         document.getElementById('image-preview').src = currentBase64Image;
                         document.getElementById('image-preview-container').style.display = 'flex';
                         scrollToBottom();
@@ -306,11 +295,10 @@ app.get('/', (req, res) => {
                     }
                 } catch (error) { 
                     loadingBox.style.display = 'none';
-                    addMessage("⚠️ فشل الاتصال بالسيرفر!", "ai", "error"); 
+                    addMessage("⚠️ فشل الاتصال بالسيرفر! ربما تخطى Vercel مهلة الـ 10 ثوانٍ المتاحة لتوليد الشارت.", "ai", "error"); 
                 }
             }
 
-            // تعديل دالة المحاكاة لتقبل تقسيم النصوص الطويلة إذا لم توجد فواصل
             function simulateMultipleBubbles(fullText, statusType = "normal") {
                 if (!fullText) return addMessage("⚠️ لم أتلق ردًا من AI.", "ai", "error");
                 
@@ -318,7 +306,6 @@ app.get('/', (req, res) => {
                 if (fullText.includes('\\n\\n')) {
                     parts = fullText.split('\\n\\n').filter(p => p.trim() !== '');
                 } else {
-                    // إذا لم توجد فواصل، قطّع النص كل 250 حرف دون كسر الكلمات
                     let text = fullText;
                     while (text.length > 0) {
                         if (text.length <= 250) {
@@ -400,7 +387,8 @@ app.post('/api/chat', async (req, res) => {
         const history = sessions[userIP].history;
 
         history.push({ role: "user", text: userMessage || "أرسل صورة" });
-        if (history.length > 10) sessions[userIP].history = history.slice(-10);
+        // تقليص الذاكرة لتسريع الإجابة وتجنب مهلة Vercel
+        if (history.length > 6) sessions[userIP].history = history.slice(-6);
 
         const conversation = sessions[userIP].history
             .map(msg => `${msg.role === 'user' ? 'المستخدم' : 'NayroVex'}: ${msg.text}`)
@@ -413,7 +401,6 @@ app.post('/api/chat', async (req, res) => {
 🚨 قواعد صارمة جداً:
 1. إذا قام المستخدم برفع صورة شارت، يجب أن يكون تحليلك مبنياً تماماً على ما تراه في الصورة مستخدماً Order Blocks والـ Liquidity.
 2. لا تقم بتكرار الديباجة الطويلة في كل رسالة.
-3. تفاعل واطرح أسئلة عكسية لفتح النقاش.
 
 المحادثة السابقة للرجوع إليها:
 ${conversation}
@@ -442,7 +429,7 @@ ${conversation}
         
     } catch (err) {
         console.error('API Error:', err.response ? err.response.data : err.message);
-        res.status(500).json({ reply: "⚠️ حدث خطأ أثناء التفكير! ربما بسبب حجم الصورة أو مفتاح الـ API.", error: true });
+        res.status(500).json({ reply: "⚠️ حدث خطأ أثناء التفكير! ربما بسبب حجم الصورة أو انتهاء مهلة الـ 10 ثوانٍ في Vercel.", error: true });
     }
 });
 
