@@ -74,7 +74,6 @@
         }
         button:hover { opacity: 0.9; box-shadow: 0 0 10px var(--accent-color); }
         
-        /* 📥 صندوق الشات المدمج */
         #chat-container {
             width: 100%;
             max-width: 500px;
@@ -110,8 +109,6 @@
             border: 1px solid #222;
         }
         .loading { text-align: center; color: var(--accent-color); display: none; margin-top: 10px; font-weight: bold; }
-        .success { color: var(--success-color); font-weight: bold;}
-        .danger { color: var(--danger-color); font-weight: bold;}
     </style>
 </head>
 <body>
@@ -134,11 +131,7 @@
     </div>
 
     <div id="chat-container">
-        <div id="chat-messages">
-            <div style="align-self: flex-start; background: #1a1a24; color: var(--chat-text); padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; text-align: right; border-left: 3px solid var(--chat-primary);">
-                أهلاً بك في المحادثة المباشرة! اسألني أي شيء أو اطلب "تحليل BTC" مثلاً.
-            </div>
-        </div>
+        <div id="chat-messages"></div>
         <div class="chat-input-group">
             <input type="text" id="user-chat-input" placeholder="تحدث مع الذكاء الاصطناعي..." style="font-size: 14px; padding: 10px;">
             <button onclick="sendMessageToAI()" style="padding: 0 15px; margin-right: 8px; background: var(--chat-primary); color: #fff;">إرسال</button>
@@ -150,7 +143,10 @@
     <script>
         const API_URL = window.location.origin;
 
-        // --- أكواد التحليل ---
+        window.onload = () => {
+            addMessage("أهلاً بك في المحادثة المباشرة! اسألني أي شيء، أو اطلب تحليل عملة مثل 'تحليل BTC' أو 'ETH/USDT'.", false);
+        };
+
         const symbolInput = document.getElementById('symbolInput');
         const analyzeBtn = document.getElementById('analyzeBtn');
 
@@ -175,10 +171,12 @@
                     const data = resData.data;
                     document.getElementById('coinTitle').innerText = `تحليل عملة ${data.symbol}`;
                     document.getElementById('aiReason').innerText = data.reason;
-                    document.getElementById('entryPrice').innerHTML = `<span class="success">${data.entry} $</span>`;
-                    document.getElementById('targetPrice').innerHTML = `<span class="success">${data.target} $</span>`;
-                    document.getElementById('stopLoss').innerHTML = `<span class="danger">${data.stopLoss} $</span>`;
+                    document.getElementById('entryPrice').innerHTML = `<span style="color: var(--success-color); font-weight: bold;">${data.entry} $</span>`;
+                    document.getElementById('targetPrice').innerHTML = `<span style="color: var(--success-color); font-weight: bold;">${data.target} $</span>`;
+                    document.getElementById('stopLoss').innerHTML = `<span style="color: var(--danger-color); font-weight: bold;">${data.stopLoss} $</span>`;
                     resultBox.style.display = 'block';
+                } else {
+                    alert(`⚠️ ${resData.message}`);
                 }
             } catch (error) {
                 loading.style.display = 'none';
@@ -186,13 +184,26 @@
             }
         }
 
-        // --- أكواد الشات ---
         function addMessage(text, isUser = false) {
             const chatMessages = document.getElementById('chat-messages');
-            chatMessages.innerHTML += `
-                <div style="align-self: ${isUser ? 'flex-end' : 'flex-start'}; background: ${isUser ? '#0055ff' : '#1a1a24'}; color: ${isUser ? '#fff' : '#00d2ff'}; padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; text-align: right; border-left: ${isUser ? 'none' : '3px solid #0055ff'};">
-                    ${text}
-                </div>`;
+            const msg = document.createElement('div');
+            
+            msg.style.alignSelf = isUser ? 'flex-end' : 'flex-start';
+            msg.style.background = isUser ? '#0055ff' : '#1a1a24';
+            msg.style.color = isUser ? '#fff' : '#00d2ff';
+            msg.style.padding = '8px 12px';
+            msg.style.borderRadius = '8px';
+            msg.style.maxWidth = '80%';
+            msg.style.fontSize = '13px';
+            msg.style.textAlign = 'right';
+            msg.style.whiteSpace = 'pre-wrap';
+
+            if (!isUser) {
+                msg.style.borderLeft = '3px solid #0055ff';
+            }
+
+            msg.textContent = text;
+            chatMessages.appendChild(msg);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
@@ -206,28 +217,60 @@
 
             const chatMessages = document.getElementById('chat-messages');
             const loadingId = 'loading-' + Date.now();
-            chatMessages.innerHTML += `<div id="${loadingId}" style="align-self: flex-start; background: #1a1a24; color: #00d2ff; padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; text-align: right; border-left: 3px solid #0055ff;">جاري التفكير... ⏳</div>`;
+            
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = loadingId;
+            loadingDiv.style.alignSelf = 'flex-start';
+            loadingDiv.style.background = '#1a1a24';
+            loadingDiv.style.color = '#00d2ff';
+            loadingDiv.style.padding = '8px 12px';
+            loadingDiv.style.borderRadius = '8px';
+            loadingDiv.style.maxWidth = '80%';
+            loadingDiv.style.fontSize = '13px';
+            loadingDiv.style.textAlign = 'right';
+            loadingDiv.style.borderLeft = '3px solid #0055ff';
+            loadingDiv.textContent = 'جاري التفكير... ⏳';
+            
+            chatMessages.appendChild(loadingDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
             try {
                 let response;
-                const coinMatch = messageText.match(/تحليل\s+(\w+)/i);
+                // Regex المحدث والذكي لالتقاط الكلمات المفتاحية والأزواج المعقدة
+                const coinMatch = messageText.match(/تحليل\s+([a-zA-Z0-9\/_-]{2,15})/i) || messageText.match(/^([a-zA-Z0-9\/_-]{2,15})$/);
                 
                 if (coinMatch) {
-                    const symbol = coinMatch[1].toUpperCase();
+                    // تنظيف الرمز بشكل احترافي وقوي
+                    const symbol = coinMatch[1]
+                        .toUpperCase()
+                        .replace(/USDT/g, '')
+                        .replace(/[\/_-]/g, '');
+
                     response = await fetch(`/api/analyze/${symbol}`);
                     const data = await response.json();
                     document.getElementById(loadingId)?.remove();
-                    addMessage(`📊 **تحليل عملة ${symbol}**:\n${data.data.reason}`);
+                    
+                    if (data.success) {
+                        addMessage(`📊 تحليل عملة ${symbol}\n${data.data.reason}`, false);
+                    } else {
+                        addMessage(`⚠️ ${data.message}`, false);
+                    }
                 } else {
                     response = await fetch('/api/chat', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ prompt: messageText })
                     });
+                    
                     const data = await response.json();
                     document.getElementById(loadingId)?.remove();
-                    addMessage(data.reply);
+                    
+                    if (!response.ok) {
+                        addMessage(data.reply || data.message || "⚠️ حدث خطأ.", false);
+                        return;
+                    }
+                    
+                    addMessage(data.reply || "لم يصل أي رد من الذكاء الاصطناعي.", false);
                 }
             } catch (error) {
                 document.getElementById(loadingId)?.remove();
