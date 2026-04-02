@@ -7,7 +7,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' })); 
+// تقييد الحجم لـ 4 ميجابايت كحد أقصى لحماية السيرفر من الانهيار
+app.use(express.json({ limit: '4mb' })); 
 
 const sessions = {}; 
 
@@ -37,6 +38,8 @@ app.get('/', (req, res) => {
                 --text-color: #e0e0e6;
                 --neutral-border: rgba(0, 255, 204, 0.15);
                 --chat-primary: #0055ff;
+                --error-color: #ff4a4a;
+                --success-color: #00ffcc;
             }
             * { box-sizing: border-box; }
             body {
@@ -61,27 +64,32 @@ app.get('/', (req, res) => {
                 flex-direction: column; gap: 15px;
                 padding-bottom: 90px;
                 background: var(--bg-color);
+                scroll-behavior: smooth;
             }
-            .message-wrapper { display: flex; flex-direction: column; max-width: 85%; }
+            .message-wrapper { display: flex; flex-direction: column; max-width: 85%; position: relative; }
             .message-wrapper.user { align-self: flex-end; }
             .message-wrapper.ai { align-self: flex-start; }
             .msg-box {
                 padding: 12px; border-radius: 12px;
                 font-size: 14px; line-height: 1.5;
-                white-space: pre-wrap; position: relative;
+                white-space: pre-wrap; word-break: break-word;
             }
             .user .msg-box { background: var(--chat-primary); color: #fff; border-bottom-right-radius: 2px; }
             .ai .msg-box { background: var(--card-bg); color: var(--text-color); border: 1px solid rgba(255, 255, 255, 0.04); border-bottom-left-radius: 2px; }
             
+            /* ألوان مخصصة حسب نوع الحالة */
+            .ai.error-msg .msg-box { border: 1px solid var(--error-color); color: var(--error-color); }
+            .ai.success-msg .msg-box { border: 1px solid var(--success-color); }
+
             .copy-btn {
-                position: absolute; bottom: -18px; left: 5px;
+                position: absolute; bottom: -20px; left: 5px;
                 background: rgba(255, 255, 255, 0.03);
                 border: 1px solid rgba(255, 255, 255, 0.05);
                 color: #777; font-size: 10px; cursor: pointer;
                 padding: 2px 6px; border-radius: 4px;
                 opacity: 0; transition: 0.2s;
             }
-            .message-wrapper.ai:hover .copy-btn { opacity: 1; bottom: -20px; }
+            .message-wrapper.ai:hover .copy-btn { opacity: 1; }
             .copy-btn:hover { color: var(--accent-color); }
             
             #image-preview-container {
@@ -92,7 +100,6 @@ app.get('/', (req, res) => {
             }
             #image-preview { max-width: 50px; max-height: 50px; border-radius: 5px; border: 1px solid var(--accent-color); }
             
-            /* ستايل مؤشر التحميل */
             .typing-indicator {
                 display: none; align-self: flex-start;
                 background: var(--card-bg); padding: 12px;
@@ -125,7 +132,7 @@ app.get('/', (req, res) => {
             <h1>NayroVex Terminal</h1>
             <div style="display:flex; gap:5px;">
                 <input type="text" id="symbolInput" placeholder="btc, sol..." style="width:60px; background:#050508; color:#fff; border:1px solid #1a1a24; border-radius:5px; padding:4px; font-size:12px;">
-                <button id="analyzeBtn" style="background:var(--accent-color); color:#000; border:none; padding:4px 10px; border-radius:5px; font-weight:bold; font-size:12px;">حلل</button>
+                <button id="analyzeBtn" style="background:var(--accent-color); color:#000; border:none; padding:4px 10px; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">حلل</button>
             </div>
         </header>
 
@@ -133,20 +140,20 @@ app.get('/', (req, res) => {
             <div id="chat-messages"></div>
             
             <div id="typing-box" class="typing-indicator">
-                جاري تحليل البيانات <span class="dots"></span><span class="dots"></span><span class="dots"></span>
+               <span id="typing-text">جاري تحليل البيانات</span> <span class="dots"></span><span class="dots"></span><span class="dots"></span>
             </div>
 
             <div id="image-preview-container">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <img id="image-preview" src="" alt="Preview">
-                    <span style="font-size:12px; color:#aaa;">تم ضغط الصورة تلقائياً ⚡</span>
+                    <span id="image-size-warning" style="font-size:12px; color:#aaa;">تم الضغط والتحويل لـ JPEG تلقائياً ⚡</span>
                 </div>
                 <span style="color:red; cursor:pointer; font-weight:bold;" onclick="clearImage()">حذف ×</span>
             </div>
 
             <div class="chat-input-area">
                 <button class="icon-btn" onclick="document.getElementById('imageInput').click()">📎</button>
-                <input type="file" id="imageInput" accept="image/png, image/jpeg, image/webp" style="display:none;" onchange="handleImageUpload()">
+                <input type="file" id="imageInput" accept="image/*" style="display:none;" onchange="handleImageUpload()">
                 <input type="text" id="user-chat-input" placeholder="اكتب رسالتك لـ NayroVex...">
                 <button class="send-btn" onclick="sendMessageToAI()">إرسال</button>
             </div>
@@ -155,21 +162,30 @@ app.get('/', (req, res) => {
         <script>
             let currentBase64Image = null;
 
-            window.onload = () => { addMessage("أهلاً بك! ارفع شارت تداول وسأقوم بتحليله لك فوراً.", false); };
+            window.onload = () => { addMessage("أهلاً بك! ارفع شارت تداول وسأقوم بتحليله لك فوراً.", "ai", "success"); };
 
-            function addMessage(text, isUser = false, imageBase64 = null) {
+            function scrollToBottom() {
+                const chatMessages = document.getElementById('chat-messages');
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            function addMessage(text, role = "ai", statusType = "normal", imageBase64 = null) {
                 const chatMessages = document.getElementById('chat-messages');
                 const wrapper = document.createElement('div');
-                wrapper.classList.add('message-wrapper', isUser ? 'user' : 'ai');
+                wrapper.classList.add('message-wrapper', role);
+                
+                if (statusType === "error") wrapper.classList.add('error-msg');
+                if (statusType === "success") wrapper.classList.add('success-msg');
                 
                 const msgBox = document.createElement('div');
                 msgBox.classList.add('msg-box');
                 
-                if (isUser && imageBase64) {
+                if (role === 'user' && imageBase64) {
                     const img = document.createElement('img');
                     img.src = imageBase64;
                     img.style.maxWidth = '100px'; img.style.borderRadius = '5px';
                     img.style.marginBottom = '5px'; img.style.display = 'block';
+                    img.onload = scrollToBottom; // النزول لأسفل بعد اكتمال الصورة
                     msgBox.appendChild(img);
                 }
 
@@ -178,7 +194,7 @@ app.get('/', (req, res) => {
                 msgBox.appendChild(textSpan);
                 wrapper.appendChild(msgBox);
                 
-                if (!isUser) {
+                if (role === 'ai') {
                     const copyBtn = document.createElement('button');
                     copyBtn.classList.add('copy-btn');
                     copyBtn.innerHTML = '📋 نسخ';
@@ -191,20 +207,12 @@ app.get('/', (req, res) => {
                 }
                 
                 chatMessages.appendChild(wrapper);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
+                scrollToBottom();
             }
 
             function handleImageUpload() {
                 const file = document.getElementById('imageInput').files[0];
                 if (!file) return;
-
-                // التحقق الصارم من نوع الملف في المتصفح
-                const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-                if (!allowedTypes.includes(file.type)) {
-                    alert('يرجى اختيار صورة بصيغة JPG أو PNG أو WEBP فقط!');
-                    document.getElementById('imageInput').value = '';
-                    return;
-                }
 
                 const reader = new FileReader();
                 reader.onload = function(e) {
@@ -214,17 +222,32 @@ app.get('/', (req, res) => {
                         let width = img.width;
                         let height = img.height;
 
-                        const max_size = 800;
+                        const max_size = 1000; // رفع الحجم الأقصى قليلاً لدقة أفضل
                         if (width > height && width > max_size) { height *= max_size / width; width = max_size; }
                         else if (height > max_size) { width *= max_size / height; height = max_size; }
 
                         canvas.width = width; canvas.height = height;
-                        const ctx = canvas.getContext('2d'); // تم التصحيح هنا من 20d إلى 2d
+                        const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
 
+                        // تحويل تلقائي لـ JPEG وتقليص الجودة لـ 70% لتقليل الوزن
                         currentBase64Image = canvas.toDataURL('image/jpeg', 0.7);
+                        
+                        // فحص الحجم في الواجهة
+                        const sizeInMB = (currentBase64Image.length * (3/4)) / (1024 * 1024);
+                        const warningSpan = document.getElementById('image-size-warning');
+                        
+                        if (sizeInMB > 3) {
+                            warningSpan.innerText = "⚠️ حجم الصورة ضخم حتى بعد الضغط!";
+                            warningSpan.style.color = "red";
+                        } else {
+                            warningSpan.innerText = "تم الضغط والتحويل لـ JPEG تلقائياً ⚡";
+                            warningSpan.style.color = "#aaa";
+                        }
+
                         document.getElementById('image-preview').src = currentBase64Image;
                         document.getElementById('image-preview-container').style.display = 'flex';
+                        scrollToBottom();
                     };
                     img.src = e.target.result;
                 };
@@ -240,14 +263,20 @@ app.get('/', (req, res) => {
             async function sendMessageToAI() {
                 const inputField = document.getElementById('user-chat-input');
                 const loadingBox = document.getElementById('typing-box');
-                const chatMessages = document.getElementById('chat-messages');
+                const typingText = document.getElementById('typing-text');
+                
                 let messageText = inputField.value.trim();
                 
                 if (!messageText && !currentBase64Image) return;
 
-                if (!messageText && currentBase64Image) messageText = "حلل هذا الشارت مستخدماً الـ SMC والسيولة.";
+                if (!messageText && currentBase64Image) {
+                    messageText = "حلل هذا الشارت مستخدماً الـ SMC والسيولة.";
+                    typingText.innerText = "جاري فحص الشارت وتحديد الـ Order Blocks";
+                } else {
+                    typingText.innerText = "جاري التفكير وصياغة الرد";
+                }
 
-                addMessage(messageText, true, currentBase64Image);
+                addMessage(messageText, "user", "normal", currentBase64Image);
                 inputField.value = '';
                 
                 const payload = { prompt: messageText };
@@ -257,9 +286,8 @@ app.get('/', (req, res) => {
 
                 clearImage();
                 
-                // إظهار مؤشر التحميل
                 loadingBox.style.display = 'block';
-                chatMessages.scrollTop = chatMessages.scrollHeight;
+                scrollToBottom();
 
                 try {
                     const response = await fetch('/api/chat', {
@@ -269,19 +297,49 @@ app.get('/', (req, res) => {
                     });
                     const data = await response.json();
                     
-                    loadingBox.style.display = 'none'; // إخفاء التحميل
-                    simulateMultipleBubbles(data.reply);
+                    loadingBox.style.display = 'none';
+                    
+                    if (data.error) {
+                        simulateMultipleBubbles(data.reply, "error");
+                    } else {
+                        simulateMultipleBubbles(data.reply, "success");
+                    }
                 } catch (error) { 
                     loadingBox.style.display = 'none';
-                    addMessage("⚠️ فشل الاتصال بالسيرفر!", false); 
+                    addMessage("⚠️ فشل الاتصال بالسيرفر!", "ai", "error"); 
                 }
             }
 
-            function simulateMultipleBubbles(fullText) {
-                if (!fullText) return addMessage("⚠️ لم أتلق ردًا من AI.", false);
-                const parts = fullText.split('\\n\\n').filter(p => p.trim() !== '');
+            // تعديل دالة المحاكاة لتقبل تقسيم النصوص الطويلة إذا لم توجد فواصل
+            function simulateMultipleBubbles(fullText, statusType = "normal") {
+                if (!fullText) return addMessage("⚠️ لم أتلق ردًا من AI.", "ai", "error");
+                
+                let parts = [];
+                if (fullText.includes('\\n\\n')) {
+                    parts = fullText.split('\\n\\n').filter(p => p.trim() !== '');
+                } else {
+                    // إذا لم توجد فواصل، قطّع النص كل 250 حرف دون كسر الكلمات
+                    let text = fullText;
+                    while (text.length > 0) {
+                        if (text.length <= 250) {
+                            parts.push(text);
+                            break;
+                        }
+                        let chunk = text.slice(0, 250);
+                        let lastSpace = chunk.lastIndexOf(' ');
+                        
+                        if (lastSpace > 150) {
+                            parts.push(text.slice(0, lastSpace).trim());
+                            text = text.slice(lastSpace).trim();
+                        } else {
+                            parts.push(chunk.trim());
+                            text = text.slice(250).trim();
+                        }
+                    }
+                }
+
                 parts.forEach((part, index) => {
-                    setTimeout(() => addMessage(part.trim(), false), index * 800);
+                    setTimeout(() => addMessage(part.trim(), "ai", statusType), index * 1000);
                 });
             }
 
@@ -290,16 +348,17 @@ app.get('/', (req, res) => {
             document.getElementById('analyzeBtn').addEventListener('click', async () => {
                 const symbol = document.getElementById('symbolInput').value.trim();
                 if(!symbol) return alert('أدخل رمز العملة!');
-                addMessage(\`ما هو تحليلك لعملة \${symbol}؟\`, true);
+                addMessage(\`ما هو تحليلك لعملة \${symbol}؟\`, "user");
                 sendMessageToAIThroughAPI(\`أعطني تحليلاً لعملة \${symbol} كمتداول محترف.\`);
             });
             
             async function sendMessageToAIThroughAPI(customText) {
                 const loadingBox = document.getElementById('typing-box');
-                const chatMessages = document.getElementById('chat-messages');
+                const typingText = document.getElementById('typing-text');
                 
+                typingText.innerText = "جاري التفكير وصياغة الرد";
                 loadingBox.style.display = 'block';
-                chatMessages.scrollTop = chatMessages.scrollHeight;
+                scrollToBottom();
 
                 try {
                     const response = await fetch('/api/chat', {
@@ -309,10 +368,15 @@ app.get('/', (req, res) => {
                     });
                     const data = await response.json();
                     loadingBox.style.display = 'none';
-                    simulateMultipleBubbles(data.reply);
+                    
+                    if (data.error) {
+                        simulateMultipleBubbles(data.reply, "error");
+                    } else {
+                        simulateMultipleBubbles(data.reply, "success");
+                    }
                 } catch (error) { 
                     loadingBox.style.display = 'none';
-                    addMessage("⚠️ فشل الاتصال!", false); 
+                    addMessage("⚠️ فشل الاتصال!", "ai", "error"); 
                 }
             }
         </script>
@@ -357,7 +421,7 @@ ${conversation}
 الرد بالفصحى (NayroVex):`;
 
         const API_KEY = process.env.GEMINI_API_KEY || process.env.SECRET_KEY;
-        if (!API_KEY) return res.status(500).json({ reply: "⚠️ مفتاح Gemini غير موجود." });
+        if (!API_KEY) return res.status(500).json({ reply: "⚠️ مفتاح Gemini غير موجود في بيئة الـ Node.", error: true });
 
         const geminiParts = [];
         if (imageBase64) {
@@ -378,7 +442,7 @@ ${conversation}
         
     } catch (err) {
         console.error('API Error:', err.response ? err.response.data : err.message);
-        res.status(500).json({ reply: "⚠️ حدث خطأ أثناء التفكير! ربما بسبب حجم الصورة أو مفتاح الـ API." });
+        res.status(500).json({ reply: "⚠️ حدث خطأ أثناء التفكير! ربما بسبب حجم الصورة أو مفتاح الـ API.", error: true });
     }
 });
 
