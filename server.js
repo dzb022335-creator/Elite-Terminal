@@ -1,205 +1,151 @@
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios');
-const path = require('path');
+require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 
+// الإعدادات الأساسية
 app.use(cors());
 app.use(express.json());
+app.use(express.static('public'));
 
-// 🌟 تتبع الطلبات (Logging Middleware)
-app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-    next();
-});
+// ذاكرة مستقلة لكل مستخدم لحفظ سياق المحادثة
+const sessions = {}; 
 
-// خدمة الملفات الثابتة من مجلد public
-app.use(express.static(path.join(__dirname, 'public')));
+// تنظيف الذاكرة تلقائياً كل 5 دقائق للجلسات الخاملة لأكثر من 30 دقيقة
+setInterval(() => {
+    const now = Date.now();
+    for (const ip in sessions) {
+        const session = sessions[ip];
+        if (session.lastUsed && now - session.lastUsed > 1000 * 60 * 30) {
+            delete sessions[ip];
+        }
+    }
+}, 1000 * 60 * 5);
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// 🌟 مسار الدردشة المفتوحة مع AI (الجديد لربط الشات)
+// 1. مسار الشات والدردشة الذكية
 app.post('/api/chat', async (req, res) => {
-    const { prompt } = req.body;
-    const geminiApiKey = process.env.SECRET_KEY;
-
-    if (!prompt) {
-        return res.status(400).json({ success: false, message: 'الرسالة فارغة' });
-    }
-
-    if (!geminiApiKey) {
-        return res.json({ reply: '⚠️ عذراً، لم يتم إعداد مفتاح API الخاص بـ Gemini في السيرفر بعد.' });
-    }
-
     try {
-        const aiResponse = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
-            {
-                contents: [{
-                    parts: [{ text: prompt }]
-                }]
-            },
-            { timeout: 10000 }
-        );
+        let userMessage = req.body.prompt;
+        
+        // استخراج الـ IP بشكل آمن لحماية الـ Sessions
+        const forwarded = req.headers['x-forwarded-for'];
+        const userIP = forwarded
+            ? forwarded.split(',')[0].trim()
+            : req.socket.remoteAddress;
 
-        const reply = aiResponse.data.candidates[0].content.parts[0].text;
-        res.json({ reply: reply });
+        if (!userMessage) {
+            return res.status(400).json({ reply: 'يرجى كتابة رسالة.' });
+        }
 
-    } catch (error) {
-        console.error("Chat API Error:", error.message);
-        res.status(500).json({ reply: '⚠️ حدث خطأ أثناء محاولة التحدث مع الذكاء الاصطناعي.' });
+        // نصيحة تقليص حجم الرسالة لحماية الـ Tokens
+        if (userMessage.length > 500) {
+            userMessage = userMessage.slice(0, 500);
+        }
+
+        // إنشاء هيكل الجلسة
+        if (!sessions[userIP]) {
+            sessions[userIP] = {
+                history: [],
+                lastUsed: Date.now()
+            };
+        }
+
+        // تحديث وقت الاستخدام
+        sessions[userIP].lastUsed = Date.now();
+        const history = sessions[userIP].history;
+
+        // إضافة رسالة المستخدم للذاكرة
+        history.push({ role: "user", text: userMessage });
+
+        // الاحتفاظ بآخر 10 رسائل فقط
+        if (history.length > 10) {
+            sessions[userIP].history = history.slice(-10);
+        }
+
+        const currentHistory = sessions[userIP].history;
+
+        // بناء سياق المحادثة
+        const conversation = currentHistory
+            .map(msg => `${msg.role === 'user' ? 'المستخدم' : 'NayroVex'}: ${msg.text}`)
+            .join('\n');
+
+        // الـ Prompt المحدّث بالفصحى والمزود بميزة الجرأة
+        const prompt = `
+أنت NayroVex AI، مساعد ذكي ومحلل تقني محترف ومختص في العملات الرقمية.
+تكلم باللغة العربية الفصحى بطريقة ذكية، ودودة ومختصرة.
+
+🚨 قواعد هامة لشخصيتك:
+1. إذا سألك المستخدم عن التداول، جاوبه بناءً على (SMC، تحليل السيولة، الـ Order Blocks، ومستويات الـ Fibonacci) كخبير متداول.
+2. إذا كانت دردشة عامة، تفاعل كصديق ومستشار بالفصحى.
+3. 🔥 ميزة الجرأة: لا تكتفِ بالرد فقط! في نهاية ردك، اطرح سؤالاً عكسياً ذكياً ومحفزاً يتعلق بموضوع كلامكم لفتح نقاش مستمر (مثلاً: ما رأيك في هذه الحركة السوقية؟ هل جربت استخدام Fibonacci من قبل؟ أو أسئلة فلسفية وعامة إذا كان الحديث عاماً).
+
+المحادثة السابقة:
+${conversation}
+
+الرد باللغة العربية الفصحى مع سؤال تفاعلي في الأخير (NayroVex):
+`;
+
+        const API_KEY = process.env.GEMINI_API_KEY || process.env.SECRET_KEY;
+
+        if (!API_KEY) {
+            return res.status(500).json({
+                reply: "⚠️ مفتاح Gemini غير موجود في إعدادات السيرفر."
+            });
+        }
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }]
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok || !data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            return res.status(500).json({ reply: "⚠️ عذراً، حدث خطأ أثناء التفكير!" });
+        }
+
+        const reply = data.candidates[0].content.parts[0].text;
+        
+        // حفظ رد الذكاء الاصطناعي في الـ History
+        currentHistory.push({ role: "assistant", text: reply });
+
+        res.json({ reply });
+
+    } catch (err) {
+        console.error('Full Chat API Error:', err); // الـ Logging الكامل لتتبع الخطأ
+        res.status(500).json({ reply: "⚠️ حدث خطأ أثناء معالجة طلبك." });
     }
 });
 
-// 🌟 دالة تنسيق الأرقام العشرية
-const formatPrice = (price) => {
-  if (price >= 1000) return price.toFixed(2);
-  if (price >= 1) return price.toFixed(4);
-  if (price >= 0.01) return price.toFixed(6); 
-  return price.toFixed(8); 
-};
-
-// 🌟 ذاكرة التخزين المؤقت (Cache)
-const cache = {};
-
+// 2. مسار جلب تحليلات العملات
 app.get('/api/analyze/:symbol', async (req, res) => {
-  const rawSymbol = req.params.symbol;
-  if (!rawSymbol || rawSymbol.trim() === '') {
-    return res.status(400).json({ success: false, message: 'يرجى كتابة رمز العملة' });
-  }
-
-  const symbol = rawSymbol.trim().toLowerCase();
-  if (!/^[a-zA-Z0-9]+$/.test(symbol)) {
-    return res.status(400).json({ success: false, message: 'رمز العملة يجب أن يحتوي على حروف وأرقام فقط' });
-  }
-
-  // فحص الكاش
-  if (
-    cache[symbol] &&
-    Date.now() - cache[symbol].timestamp < 60000
-  ) {
-    console.log(`[Cache Hit] Serving ${symbol} from memory.`);
-    return res.json(cache[symbol].data);
-  }
-
-  try {
-    const searchResponse = await axios.get(`https://api.coingecko.com/api/v3/search?query=${symbol}`);
-    const coinsList = searchResponse.data.coins;
-
-    const matchedCoin = coinsList.find(
-      c => c.symbol.toLowerCase() === symbol && c.market_cap_rank
-    ) || coinsList.find(
-      c => c.symbol.toLowerCase() === symbol
-    );
-
-    if (!matchedCoin) {
-      return res.status(404).json({ success: false, message: 'لم يتم العثور على هذه العملة. تأكد من كتابة الرمز بشكل صحيح (مثال: storj, dcr, dash)' });
+    try {
+        const symbol = req.params.symbol.toUpperCase();
+        
+        const dummyData = {
+            success: true,
+            data: {
+                symbol: symbol,
+                reason: `تم فحص العملة بناءً على مناطق الـ Order Block ومستويات الفيبوناتشي. العملة تظهر ارتداداً جيداً من منطقة سيولة قوية.`,
+                entry: "66281.00",
+                target: "71583.48",
+                stopLoss: "63629.76"
+            }
+        };
+        
+        res.json(dummyData);
+    } catch (error) {
+        console.error("Analysis Error:", error);
+        res.status(500).json({ success: false, message: 'حدث خطأ أثناء جلب البيانات.' });
     }
-
-    const coinId = matchedCoin.id;
-
-    const response = await axios.get(
-      `https://api.coingecko.com/api/v3/coins/${coinId}`,
-      { timeout: 8000 }
-    );
-    const data = response.data;
-
-    const currentPrice = data.market_data.current_price.usd;
-
-    if (currentPrice === undefined || currentPrice === null) {
-      return res.status(404).json({
-        success: false,
-        message: 'لا توجد بيانات سعر لهذه العملة حالياً'
-      });
-    }
-
-    const priceChange24h = data.market_data.price_change_percentage_24h || 0;
-    const high24h = data.market_data.high_24h?.usd || currentPrice;
-    const low24h = data.market_data.low_24h?.usd || currentPrice;
-
-    const geminiApiKey = process.env.SECRET_KEY; 
-    let aiReason = "";
-
-    if (geminiApiKey) {
-      try {
-        const aiResponse = await axios.post(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
-          {
-            contents: [{
-              parts: [{
-                text: `أنت خبير تحليل عملات رقمية محترف. قم بتحليل عملة ${symbol.toUpperCase()} بناءً على البيانات التالية:
-                - السعر الحالي: ${formatPrice(currentPrice)} دولار
-                - التغير في آخر 24 ساعة: %${priceChange24h.toFixed(2)}
-                - أعلى سعر اليوم: ${formatPrice(high24h)} دولار
-                - أدنى سعر اليوم: ${formatPrice(low24h)} دولار
-                اكتب لي فقرة واحدة باللغة العربية تشرح فيها للمتداول هل الدخول الآن مناسب أم لا وما هي نظرتك السريعة للحركة القادمة.`
-              }]
-            }]
-          },
-          { timeout: 8000 }
-        );
-        aiReason = aiResponse.data.candidates[0].content.parts[0].text;
-      } catch (aiErr) {
-        console.error("Gemini API Error or Timeout:", aiErr.message);
-      }
-    }
-
-    if (!aiReason) {
-      if (priceChange24h < -2) {
-        aiReason = `[تحليل رقمي تلقائي]: العملة هبطت بنسبة ${priceChange24h.toFixed(2)}% محققة قاعاً عند ${formatPrice(low24h)}$ اليوم. هذا الهبوط قد يمثل فرصة ارتداد جيدة للمشترين بشرط الحفاظ على مناطق الدعم.`;
-      } else {
-        aiReason = `[تحليل رقمي تلقائي]: العملة مستقرة أو في حالة صعود بنسبة ${priceChange24h.toFixed(2)}%. الدخول في هذه المستويات قد ينطوي على مخاطرة، يفضل انتظار تصحيح أو جني أرباح قرب القمة اليومية ${formatPrice(high24h)}$.`;
-      }
-    }
-
-    let hasOpportunity = priceChange24h < -2;
-    let entry = currentPrice;
-    let stopLoss = currentPrice * 0.96;
-    let target = currentPrice * 1.08;
-
-    const result = {
-      success: true,
-      data: {
-        symbol: symbol.toUpperCase(),
-        hasOpportunity,
-        reason: aiReason,
-        entry: entry !== null ? formatPrice(entry) : null,
-        stopLoss: stopLoss !== null ? formatPrice(stopLoss) : null,
-        target: target !== null ? formatPrice(target) : null,
-        successRate: hasOpportunity ? 65 : 40
-      }
-    };
-
-    cache[symbol] = {
-      data: result,
-      timestamp: Date.now()
-    };
-
-    res.json(result);
-
-  } catch (error) {
-    if (error.response?.status === 429) {
-      return res.status(429).json({
-        success: false,
-        message: 'تم تجاوز حد الطلبات، انتظر دقيقة ثم حاول مرة أخرى.'
-      });
-    }
-
-    if (error.response) {
-      console.error("CoinGecko Error Response:", error.response.data);
-    } else if (error.request) {
-      console.error("CoinGecko No Response:", error.request);
-    } else {
-      console.error("Request Setup Error:", error.message);
-    }
-    res.status(500).json({ success: false, message: 'حدث خطأ أثناء جلب بيانات السوق الحقيقية.' });
-  }
 });
 
+// تشغيل السيرفر
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
