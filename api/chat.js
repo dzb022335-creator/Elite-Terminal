@@ -1,4 +1,4 @@
-// 1. دالة موحدة لإضافة الرسائل لتقليل تكرار الكود
+// 1. دالة موحدة لإضافة الرسائل
 function addMessage(text, isUser = false) {
     const chatMessages = document.getElementById('chat-messages');
     chatMessages.innerHTML += `
@@ -17,7 +17,6 @@ function addMessage(text, isUser = false) {
             ${text}
         </div>
     `;
-    // النزول لأسفل الشات تلقائياً
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
@@ -28,13 +27,9 @@ async function sendMessageToAI() {
     
     if (messageText === '') return;
 
-    // إظهار رسالة المستخدم في الشات
     addMessage(messageText, true);
-    
-    // تفريغ حقل الكتابة
     inputField.value = '';
 
-    // إظهار مؤشر الانتظار
     const chatMessages = document.getElementById('chat-messages');
     const loadingId = 'loading-' + Date.now();
     chatMessages.innerHTML += `
@@ -45,51 +40,38 @@ async function sendMessageToAI() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
     try {
-        let response;
+        // تم توجيه كل الطلبات لملف الـ chat السليم لتفادي الأخطاء
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: messageText })
+        });
         
-        // فحص ما إذا كان المستخدم يطلب تحليل عملة مباشرة (مثال: تحليل BTC أو SOL)
-        const coinMatch = messageText.match(/تحليل\s+(\w+)/i);
+        const data = await response.json();
         
-        if (coinMatch) {
-            const symbol = coinMatch[1].toUpperCase();
-            // استدعاء الـ API الخاص بالتحليل مباشرة
-            response = await fetch(`/api/analyze/${symbol}`);
-            const data = await response.json();
-            
-            // حذف مؤشر الانتظار
-            document.getElementById(loadingId)?.remove();
-            
-            // عرض نتيجة التحليل
-            addMessage(`📊 **تحليل عملة ${symbol}**:\n${data.data.reason}`);
-        } else {
-            // 🌟 التعديل هنا: تم توجيه الطلب للمسار الصحيح في سيرفرك
-            response = await fetch('/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: messageText })
-            });
-            const data = await response.json();
-            
-            // حذف مؤشر الانتظار
-            document.getElementById(loadingId)?.remove();
-            
-            // عرض رد البوت
+        document.getElementById(loadingId)?.remove();
+        
+        if (data.reply) {
             addMessage(data.reply);
+        } else if (data.error) {
+            addMessage("⚠️ السيرفر شغال ولكن هناك مشكلة في المفتاح أو الـ API.");
+        } else {
+            addMessage("⚠️ رد غير مفهوم من السيرفر!");
         }
 
     } catch (error) {
         document.getElementById(loadingId)?.remove();
-        addMessage("⚠️ حدث خطأ في الاتصال بالسيرفر! تأكد من إعدادات الـ API.", false);
+        addMessage("⚠️ حدث خطأ! قد تكون المهلة انتهت أو السيرفر غير مستقر.", false);
     }
 }
 
-// 3. دعم الضغط على Enter للإرسال و Shift+Enter لسطر جديد
+// 3. دعم الضغط على Enter للإرسال
 document.addEventListener('DOMContentLoaded', () => {
     const inputField = document.getElementById('user-chat-input');
     if (inputField) {
         inputField.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault(); // منع كسر السطر
+                e.preventDefault();
                 sendMessageToAI();
             }
         });
