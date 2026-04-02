@@ -7,13 +7,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-// تقييد السيرفر بحد أقصى 4 ميجابايت لحجم الـ Payload بالكامل
 app.use(express.json({ limit: '4mb' })); 
 
-// مخزن مؤقت للجلسات (يمكنك مستقبلاً استبدال هذا المتغير بـ Redis أو Supabase)
 const sessions = {}; 
 
-// دالة تنظيف الذاكرة كل 5 دقائق
 setInterval(() => {
     const now = Date.now();
     for (const ip in sessions) {
@@ -97,7 +94,8 @@ app.get('/', (req, res) => {
                 flex: 1; padding: 15px;
                 overflow-y: auto; display: flex;
                 flex-direction: column; gap: 24px;
-                padding-bottom: 90px;
+                /* تعديل 1: زدنا الـ padding لكي تظهر الرسالة كاملة فوق حقل الإدخال */
+                padding-bottom: 120px; 
                 background: transparent;
                 scroll-behavior: smooth;
             }
@@ -267,11 +265,14 @@ app.get('/', (req, res) => {
 
             window.onload = () => { addMessage("تم تفعيل الاتصال بالنظام. ارفع شارت تداول وسأقوم بتحليله لك فوراً.", "ai", "success"); };
 
+            // تعديل 2: تصحيح دالة السكرول لمنع الالتصاق والتحرك الإجباري
             function scrollToBottom() {
                 const chatMessages = document.getElementById('chat-messages');
-                const isScrolledToBottom = chatMessages.scrollHeight - chatMessages.clientHeight <= chatMessages.scrollTop + 100;
                 
-                if (isScrolledToBottom) {
+                // إذا كان المستخدم قد صعد للأعلى لقراءة شيء، لا نجبره على النزول
+                const isUserReadingAbove = chatMessages.scrollHeight - chatMessages.clientHeight > chatMessages.scrollTop + 150;
+                
+                if (!isUserReadingAbove) {
                     chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: 'smooth' });
                 }
             }
@@ -341,12 +342,10 @@ app.get('/', (req, res) => {
                 scrollToBottom();
             }
 
-            // تحسين 1 & 4: حماية حدود الرفع ومعالجة الصور الكبيرة بنسب مضبوطة
             function handleImageUpload() {
                 const file = document.getElementById('imageInput').files[0];
                 if (!file) return;
 
-                // منع رفع أي ملف يتعدى الـ 10 ميجابايت كحماية أولية
                 if (file.size > 10 * 1024 * 1024) {
                     alert('ملف الصورة كبير جداً! الحد الأقصى المسموح به هو 10MB.');
                     document.getElementById('imageInput').value = '';
@@ -361,7 +360,6 @@ app.get('/', (req, res) => {
                         let width = img.width;
                         let height = img.height;
 
-                        // تقليل المقاسات لو كانت الصورة عملاقة مع الحفاظ على النسبة
                         const max_size = 600; 
                         if (width > height && width > max_size) { height *= max_size / width; width = max_size; }
                         else if (height > max_size) { width *= max_size / height; height = max_size; }
@@ -374,7 +372,10 @@ app.get('/', (req, res) => {
 
                         document.getElementById('image-preview').src = currentBase64Image;
                         document.getElementById('image-preview-container').style.display = 'flex';
-                        scrollToBottom();
+                        
+                        // تعديل 3: إجبار السكرول على النزول بعد اختيار الصورة لكي تظهر المعاينة
+                        const chatMessages = document.getElementById('chat-messages');
+                        chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: 'smooth' });
                     };
                     img.src = e.target.result;
                 };
@@ -397,7 +398,6 @@ app.get('/', (req, res) => {
                     messageText = "حلل هذا الشارت مستخدماً الـ SMC والسيولة.";
                 }
 
-                // تحسين 4: قيد نصي لمنع الإغراق
                 if (messageText.length > 500) {
                     alert('النص طويل جداً! الحد الأقصى هو 500 حرف.');
                     return;
@@ -418,7 +418,10 @@ app.get('/', (req, res) => {
                 
                 typingText.innerText = imageBase64 ? "فحص البروتوكول وتحديد الـ Blocks" : "صياغة تحليل الشبكة";
                 loadingBox.style.display = 'block';
-                scrollToBottom();
+                
+                // إجبار النزول لرؤية الـ loading
+                const chatMessages = document.getElementById('chat-messages');
+                chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: 'smooth' });
 
                 const payload = { prompt: promptText };
                 if (imageBase64) {
@@ -446,7 +449,6 @@ app.get('/', (req, res) => {
                 }
             }
 
-            // تحسين 3: تقسيم الردود الذكي بطريقة مريحة للعين
             function simulateMultipleBubbles(fullText, statusType = "normal") {
                 if (!fullText) return addMessage("⚠️ لم أتلق ردًا من AI.", "ai", "error");
                 
@@ -557,7 +559,6 @@ app.post('/api/chat', async (req, res) => {
         const forwarded = req.headers['x-forwarded-for'];
         const userIP = forwarded ? forwarded.split(',')[0].trim() : req.socket.remoteAddress;
 
-        // حماية أمنية من السيرفر للنصوص الطويلة جداً
         if (userMessage && userMessage.length > 500) userMessage = userMessage.slice(0, 500);
 
         if (!sessions[userIP]) sessions[userIP] = { history: [], lastUsed: Date.now() };
