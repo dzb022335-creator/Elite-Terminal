@@ -7,10 +7,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
+// تقييد السيرفر بحد أقصى 4 ميجابايت لحجم الـ Payload بالكامل
 app.use(express.json({ limit: '4mb' })); 
 
+// مخزن مؤقت للجلسات
 const sessions = {}; 
 
+// دالة تنظيف الذاكرة كل 5 دقائق
 setInterval(() => {
     const now = Date.now();
     for (const ip in sessions) {
@@ -94,7 +97,6 @@ app.get('/', (req, res) => {
                 flex: 1; padding: 15px;
                 overflow-y: auto; display: flex;
                 flex-direction: column; gap: 24px;
-                /* تعديل 1: زدنا الـ padding لكي تظهر الرسالة كاملة فوق حقل الإدخال */
                 padding-bottom: 120px; 
                 background: transparent;
                 scroll-behavior: smooth;
@@ -265,11 +267,8 @@ app.get('/', (req, res) => {
 
             window.onload = () => { addMessage("تم تفعيل الاتصال بالنظام. ارفع شارت تداول وسأقوم بتحليله لك فوراً.", "ai", "success"); };
 
-            // تعديل 2: تصحيح دالة السكرول لمنع الالتصاق والتحرك الإجباري
             function scrollToBottom() {
                 const chatMessages = document.getElementById('chat-messages');
-                
-                // إذا كان المستخدم قد صعد للأعلى لقراءة شيء، لا نجبره على النزول
                 const isUserReadingAbove = chatMessages.scrollHeight - chatMessages.clientHeight > chatMessages.scrollTop + 150;
                 
                 if (!isUserReadingAbove) {
@@ -373,7 +372,6 @@ app.get('/', (req, res) => {
                         document.getElementById('image-preview').src = currentBase64Image;
                         document.getElementById('image-preview-container').style.display = 'flex';
                         
-                        // تعديل 3: إجبار السكرول على النزول بعد اختيار الصورة لكي تظهر المعاينة
                         const chatMessages = document.getElementById('chat-messages');
                         chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: 'smooth' });
                     };
@@ -398,8 +396,8 @@ app.get('/', (req, res) => {
                     messageText = "حلل هذا الشارت مستخدماً الـ SMC والسيولة.";
                 }
 
-                if (messageText.length > 500) {
-                    alert('النص طويل جداً! الحد الأقصى هو 500 حرف.');
+                if (messageText.length > 300) {
+                    alert('النص طويل جداً! الحد الأقصى هو 300 حرف.');
                     return;
                 }
 
@@ -419,7 +417,6 @@ app.get('/', (req, res) => {
                 typingText.innerText = imageBase64 ? "فحص البروتوكول وتحديد الـ Blocks" : "صياغة تحليل الشبكة";
                 loadingBox.style.display = 'block';
                 
-                // إجبار النزول لرؤية الـ loading
                 const chatMessages = document.getElementById('chat-messages');
                 chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: 'smooth' });
 
@@ -445,7 +442,7 @@ app.get('/', (req, res) => {
                     }
                 } catch (error) { 
                     loadingBox.style.display = 'none';
-                    addMessage("⚠️ فشل الاتصال بالسيرفر! الشبكة غير مستقرة.", "ai", "error"); 
+                    addMessage("⚠️ حدث خطأ! قد تكون المهلة انتهت أو السيرفر غير مستقر.", "ai", "error"); 
                 }
             }
 
@@ -559,31 +556,24 @@ app.post('/api/chat', async (req, res) => {
         const forwarded = req.headers['x-forwarded-for'];
         const userIP = forwarded ? forwarded.split(',')[0].trim() : req.socket.remoteAddress;
 
-        if (userMessage && userMessage.length > 500) userMessage = userMessage.slice(0, 500);
+        if (userMessage && userMessage.length > 300) userMessage = userMessage.slice(0, 300);
 
         if (!sessions[userIP]) sessions[userIP] = { history: [], lastUsed: Date.now() };
         sessions[userIP].lastUsed = Date.now();
         const history = sessions[userIP].history;
 
         history.push({ role: "user", text: userMessage || "أرسل صورة" });
-        if (history.length > 6) sessions[userIP].history = history.slice(-6);
+        
+        if (history.length > 2) sessions[userIP].history = history.slice(-2);
 
         const conversation = sessions[userIP].history
-            .map(msg => `${msg.role === 'user' ? 'المستخدم' : 'NayroVex'}: ${msg.text}`)
+            .map(msg => `${msg.role === 'user' ? 'U' : 'AI'}: ${msg.text}`)
             .join('\n');
 
-        const prompt = `
-أنت NayroVex AI، مساعد ذكي ومحلل تقني محترف ومحاور جريء في أسواق العملات الرقمية.
-تكلم باللغة العربية الفصحى بطريقة ذكية، ودودة ومختصرة جداً.
-
-🚨 قواعد صارمة جداً:
-1. إذا قام المستخدم برفع صورة شارت، يجب أن يكون تحليلك مبنياً تماماً على ما تراه في الصورة مستخدماً Order Blocks والـ Liquidity.
-2. لا تقم بتكرار الديباجة الطويلة في كل رسالة.
-
-المحادثة السابقة للرجوع إليها:
+        const prompt = `You are NayroVex AI crypto analyst. Reply in Arabic. Be extremely concise. Use SMC/Order Blocks if analyzing charts.
+Context:
 ${conversation}
-
-الرد بالفصحى (NayroVex):`;
+Reply:`;
 
         const API_KEY = process.env.GEMINI_API_KEY || process.env.SECRET_KEY;
         if (!API_KEY) return res.status(500).json({ reply: "⚠️ مفتاح Gemini غير موجود في بيئة الـ Node.", error: true });
@@ -598,20 +588,44 @@ ${conversation}
 
         geminiContents.push({ parts: parts });
 
+        // تعديل 1: العودة إلى إصدار 1.5 الفلاش الأكثر استقراراً، ووضع timeout للطلب
         const response = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
-            { contents: geminiContents },
-            { headers: { 'Content-Type': 'application/json' } }
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
+            { 
+                contents: geminiContents,
+                generationConfig: {
+                    maxOutputTokens: 300
+                }
+            },
+            { 
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 8000 // قطع الاتصال إذا علق لأكثر من 8 ثوانٍ لحماية الموقع في Vercel
+            }
         );
 
-        const reply = response?.data?.candidates?.[0]?.content?.parts?.[0]?.text || "⚠️ لم أستطع استخراج رد من الموديل.";
+        // تعديل 2: حماية قراءة الرد حتى لو تعطل سيرفر Gemini أو حظر المحتوى
+        let reply = "⚠️ لم أستطع استخراج رد.";
+        if (response.data && response.data.candidates && response.data.candidates[0]?.content?.parts?.[0]?.text) {
+            reply = response.data.candidates[0].content.parts[0].text;
+        } else if (response.data && response.data.promptFeedback?.blockReason) {
+             reply = "⚠️ تم حجب المحتوى من قِبل سياسات مزود الخدمة.";
+        }
         
         sessions[userIP].history.push({ role: "assistant", text: reply });
         res.json({ reply });
         
     } catch (err) {
         console.error('API Error:', err.response ? err.response.data : err.message);
-        res.status(500).json({ reply: "⚠️ حدث خطأ أثناء التفكير! ربما بسبب حجم الصورة أو انتهاء مهلة الـ 10 ثوانٍ في Vercel.", error: true });
+        
+        // تعديل 3: تفصيل رسائل الخطأ لتكون أوضح
+        let errorMsg = "⚠️ حدث خطأ أثناء التفكير!";
+        if (err.code === 'ECONNABORTED') {
+            errorMsg = "⚠️ انتهت مهلة الرد من مزود الخدمة. يرجى المحاولة لاحقاً.";
+        } else if (err.response && err.response.status === 429) {
+            errorMsg = "⚠️ تم تخطي الحد المسموح للاستخدام اليومي في مفتاح الـ API.";
+        }
+        
+        res.status(200).json({ reply: errorMsg, error: true });
     }
 });
 
