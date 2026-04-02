@@ -7,10 +7,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
+// تقييد السيرفر بحد أقصى 4 ميجابايت لحجم الـ Payload بالكامل
 app.use(express.json({ limit: '4mb' })); 
 
+// مخزن مؤقت للجلسات (يمكنك مستقبلاً استبدال هذا المتغير بـ Redis أو Supabase)
 const sessions = {}; 
 
+// دالة تنظيف الذاكرة كل 5 دقائق
 setInterval(() => {
     const now = Date.now();
     for (const ip in sessions) {
@@ -31,9 +34,10 @@ app.get('/', (req, res) => {
         <title>NayroVex Elite Terminal</title>
         <style>
             :root {
-                --bg-color: #08080c;
-                --card-bg: #11111a;
+                --bg-color: #050508;
+                --card-bg: #0b0b14;
                 --accent-color: #00ffcc;
+                --accent-glow: rgba(0, 255, 204, 0.4);
                 --text-color: #e0e0e6;
                 --neutral-border: rgba(0, 255, 204, 0.15);
                 --chat-primary: #0055ff;
@@ -48,35 +52,79 @@ app.get('/', (req, res) => {
                 margin: 0; padding: 0;
                 display: flex; flex-direction: column;
                 height: 100vh; overflow: hidden;
+                background-image: radial-gradient(circle at 50% 50%, #0d111a 0%, #050508 100%);
             }
             header {
-                background: #0a0a0f;
+                background: rgba(10, 10, 15, 0.8);
+                backdrop-filter: blur(10px);
                 border-bottom: 1px solid var(--neutral-border);
                 padding: 8px 15px;
                 display: flex; justify-content: space-between; align-items: center;
                 height: 55px; flex-shrink: 0;
+                box-shadow: 0 4px 20px rgba(0, 255, 204, 0.05);
             }
-            h1 { color: var(--accent-color); font-size: 16px; margin: 0; font-weight: 800; }
+            h1 { color: var(--accent-color); font-size: 16px; margin: 0; font-weight: 800; text-shadow: 0 0 10px var(--accent-glow); }
+            
+            .futuristic-btn {
+                background: linear-gradient(135deg, rgba(0, 255, 204, 0.1) 0%, rgba(0, 85, 255, 0.05) 100%);
+                border: 1px solid var(--accent-color);
+                color: #fff; font-size: 11px; font-weight: bold;
+                text-transform: uppercase; letter-spacing: 1px;
+                padding: 6px 12px; border-radius: 4px; cursor: pointer;
+                transition: all 0.3s ease;
+                box-shadow: 0 0 5px rgba(0, 255, 204, 0.2);
+                display: inline-flex; align-items: center; gap: 5px;
+            }
+            .futuristic-btn:hover {
+                background: linear-gradient(135deg, rgba(0, 255, 204, 0.2) 0%, rgba(0, 85, 255, 0.1) 100%);
+                box-shadow: 0 0 15px var(--accent-glow);
+                text-shadow: 0 0 5px #fff;
+                transform: translateY(-1px);
+            }
+            
+            .futuristic-btn.danger {
+                border-color: var(--error-color);
+                background: linear-gradient(135deg, rgba(255, 74, 74, 0.1) 0%, rgba(0, 0, 0, 0.5) 100%);
+                color: #ffb3b3;
+                box-shadow: 0 0 5px rgba(255, 74, 74, 0.2);
+            }
+            .futuristic-btn.danger:hover {
+                background: linear-gradient(135deg, rgba(255, 74, 74, 0.2) 0%, rgba(0, 0, 0, 0.5) 100%);
+                box-shadow: 0 0 15px rgba(255, 74, 74, 0.3);
+            }
+
             #chat-messages {
                 flex: 1; padding: 15px;
                 overflow-y: auto; display: flex;
                 flex-direction: column; gap: 24px;
                 padding-bottom: 90px;
-                background: var(--bg-color);
+                background: transparent;
                 scroll-behavior: smooth;
             }
             .message-wrapper { display: flex; flex-direction: column; max-width: 85%; position: relative; }
             .message-wrapper.user { align-self: flex-end; }
             .message-wrapper.ai { align-self: flex-start; }
+            
             .msg-box {
                 padding: 12px; border-radius: 12px;
                 font-size: 14px; line-height: 1.5;
                 white-space: pre-wrap; word-break: break-word;
+                backdrop-filter: blur(5px);
             }
-            .user .msg-box { background: var(--chat-primary); color: #fff; border-bottom-right-radius: 2px; }
-            .ai .msg-box { background: var(--card-bg); color: var(--text-color); border: 1px solid rgba(255, 255, 255, 0.04); border-bottom-left-radius: 2px; }
+            .user .msg-box { 
+                background: linear-gradient(135deg, var(--chat-primary) 0%, #0033aa 100%); 
+                color: #fff; border-bottom-right-radius: 2px;
+                box-shadow: 0 4px 15px rgba(0, 85, 255, 0.2);
+            }
+            .ai .msg-box { 
+                background: var(--card-bg); 
+                color: var(--text-color); 
+                border: 1px solid rgba(0, 255, 204, 0.05); 
+                border-bottom-left-radius: 2px;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            }
             
-            .ai.error-msg .msg-box { border: 1px solid var(--error-color); color: var(--error-color); }
+            .ai.error-msg .msg-box { border: 1px solid var(--error-color); color: var(--error-color); background: rgba(255, 74, 74, 0.05); }
             .ai.success-msg .msg-box { border: 1px solid var(--success-color); }
 
             .btn-group {
@@ -87,12 +135,13 @@ app.get('/', (req, res) => {
             .message-wrapper.ai:hover .btn-group { opacity: 1; }
             
             .action-btn {
-                background: rgba(255, 255, 255, 0.03);
-                border: 1px solid rgba(255, 255, 255, 0.05);
-                color: #777; font-size: 10px; cursor: pointer;
-                padding: 2px 6px; border-radius: 4px;
+                background: rgba(11, 11, 20, 0.8);
+                border: 1px solid rgba(0, 255, 204, 0.2);
+                color: #00ffcc; font-size: 10px; cursor: pointer;
+                padding: 2px 8px; border-radius: 4px;
+                font-weight: bold; text-transform: uppercase;
             }
-            .action-btn:hover { color: var(--accent-color); border-color: var(--accent-color); }
+            .action-btn:hover { background: var(--accent-color); color: #000; box-shadow: 0 0 10px var(--accent-glow); }
             
             .tooltip {
                 position: absolute; background: #000; color: #fff;
@@ -104,17 +153,19 @@ app.get('/', (req, res) => {
             
             #image-preview-container {
                 display: none; padding: 5px 15px;
-                background: rgba(0,0,0,0.5); position: fixed;
+                background: rgba(5, 5, 8, 0.9); position: fixed;
                 bottom: 65px; left: 0; width: 100%; z-index: 5;
                 align-items: center; justify-content: space-between;
+                border-top: 1px solid var(--neutral-border);
             }
-            #image-preview { max-width: 50px; max-height: 50px; border-radius: 5px; border: 1px solid var(--accent-color); }
+            #image-preview { max-width: 50px; max-height: 50px; border-radius: 5px; border: 1px solid var(--accent-color); box-shadow: 0 0 10px var(--accent-glow); }
             
             .typing-indicator {
                 display: none; align-self: flex-start;
                 background: var(--card-bg); padding: 12px;
-                border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.04);
+                border-radius: 12px; border: 1px solid rgba(0, 255, 204, 0.1);
                 color: var(--accent-color); font-size: 12px; font-weight: bold;
+                text-shadow: 0 0 5px var(--accent-glow);
             }
             .dots { display: inline-block; width: 5px; height: 5px; background: var(--accent-color); border-radius: 50%; animation: blink 1.4s infinite both; margin: 0 2px; }
             .dots:nth-child(2) { animation-delay: 0.2s; }
@@ -122,46 +173,57 @@ app.get('/', (req, res) => {
             @keyframes blink { 0%, 80%, 100% { opacity: 0; } 40% { opacity: 1; } }
 
             .chat-input-area {
-                background: #0a0a0f;
-                border-top: 1px solid rgba(255, 255, 255, 0.03);
+                background: rgba(10, 10, 15, 0.9);
+                backdrop-filter: blur(10px);
+                border-top: 1px solid var(--neutral-border);
                 padding: 10px; display: flex; gap: 8px; align-items: center;
                 position: fixed; bottom: 0; left: 0; width: 100%; z-index: 10;
             }
             .chat-input-area input[type="text"] {
-                flex: 1; background: #050508;
+                flex: 1; background: #08080c;
                 border: 1px solid #1a1a24; color: #fff;
                 padding: 10px; border-radius: 8px; font-size: 14px; outline: none;
+                transition: border 0.3s;
             }
-            .icon-btn { background: transparent; border: none; color: #777; font-size: 18px; cursor: pointer; padding: 5px; }
-            .send-btn { background: var(--chat-primary); color: #fff; border: none; padding: 10px 18px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+            .chat-input-area input[type="text"]:focus { border-color: var(--accent-color); box-shadow: 0 0 10px rgba(0, 255, 204, 0.1); }
+            
+            .icon-btn { background: transparent; border: none; color: #777; font-size: 18px; cursor: pointer; padding: 5px; transition: 0.3s; }
+            .icon-btn:hover { color: var(--accent-color); }
+            
+            .send-btn { 
+                background: linear-gradient(135deg, var(--chat-primary) 0%, #0033aa 100%); 
+                color: #fff; border: none; padding: 10px 18px; border-radius: 8px; 
+                font-weight: bold; cursor: pointer; transition: 0.3s;
+                text-transform: uppercase; letter-spacing: 1px; font-size: 12px;
+                box-shadow: 0 4px 10px rgba(0, 85, 255, 0.2);
+            }
+            .send-btn:hover { box-shadow: 0 4px 15px rgba(0, 85, 255, 0.4); transform: translateY(-1px); }
 
-            /* نافذة المعاينة (Modal) */
             .modal-overlay {
                 display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center;
+                background: rgba(0,0,0,0.85); z-index: 100; align-items: center; justify-content: center;
+                backdrop-filter: blur(5px);
             }
             .modal-content {
-                background: var(--card-bg); width: 85%; max-width: 500px; max-height: 70vh;
-                border: 1px solid var(--neutral-border); border-radius: 12px; padding: 20px;
+                background: #0b0b14; width: 85%; max-width: 500px; max-height: 70vh;
+                border: 1px solid var(--accent-color); border-radius: 12px; padding: 20px;
                 display: flex; flex-direction: column; gap: 15px;
+                box-shadow: 0 0 30px rgba(0, 255, 204, 0.1);
             }
-            .modal-header { font-weight: bold; color: var(--accent-color); border-bottom: 1px solid #1a1a24; padding-bottom: 10px; }
-            .modal-body { overflow-y: auto; font-size: 12px; color: #aaa; background: #08080c; padding: 10px; border-radius: 8px; white-space: pre-wrap; flex: 1; }
+            .modal-header { font-weight: bold; color: var(--accent-color); border-bottom: 1px solid rgba(0, 255, 204, 0.1); padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+            .modal-body { overflow-y: auto; font-size: 12px; color: #aaa; background: #050508; padding: 10px; border-radius: 8px; white-space: pre-wrap; flex: 1; border: 1px solid #111; }
             .modal-footer { display: flex; justify-content: flex-end; gap: 10px; }
-            .modal-btn { padding: 6px 15px; border-radius: 5px; font-size: 12px; cursor: pointer; font-weight: bold; }
-            .modal-btn.cancel { background: #222; color: #fff; border: 1px solid #333; }
-            .modal-btn.confirm { background: var(--accent-color); color: #000; border: none; }
         </style>
     </head>
     <body>
 
         <header>
-            <h1>NayroVex Terminal</h1>
-            <div style="display:flex; gap:5px; align-items:center;">
-                <button onclick="openSummaryModal()" style="background:transparent; border:1px solid var(--neutral-border); color:#aaa; padding:4px 8px; border-radius:5px; font-size:11px; cursor:pointer;">📥 تلخيص</button>
-                <button onclick="clearFullSession()" style="background:transparent; border:1px solid #ff4a4a; color:#ff4a4a; padding:4px 8px; border-radius:5px; font-size:11px; cursor:pointer;">🗑️ مسح</button>
-                <input type="text" id="symbolInput" placeholder="btc, sol..." style="width:50px; background:#050508; color:#fff; border:1px solid #1a1a24; border-radius:5px; padding:4px; font-size:12px;">
-                <button id="analyzeBtn" style="background:var(--accent-color); color:#000; border:none; padding:4px 10px; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">حلل</button>
+            <h1>NayroVex Elite Terminal</h1>
+            <div style="display:flex; gap:6px; align-items:center;">
+                <button class="futuristic-btn" onclick="openSummaryModal()">📥 ملخص</button>
+                <button class="futuristic-btn danger" onclick="clearFullSession()">🗑️ مسح</button>
+                <input type="text" id="symbolInput" placeholder="btc" style="width:50px; background:#08080c; color:#fff; border:1px solid #1a1a24; border-radius:5px; padding:4px; font-size:12px; text-align:center;">
+                <button id="analyzeBtn" class="futuristic-btn" style="color:#000; background:var(--accent-color);">حلل</button>
             </div>
         </header>
 
@@ -169,47 +231,49 @@ app.get('/', (req, res) => {
             <div id="chat-messages"></div>
             
             <div id="typing-box" class="typing-indicator">
-               <span id="typing-text">جاري تحليل البيانات</span> <span class="dots"></span><span class="dots"></span><span class="dots"></span>
+               <span id="typing-text">تحميل بيانات البروتوكول</span> <span class="dots"></span><span class="dots"></span><span class="dots"></span>
             </div>
 
             <div id="image-preview-container">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <img id="image-preview" src="" alt="Preview">
-                    <span id="image-size-warning" style="font-size:12px; color:#aaa;">تم الضغط والتحويل لـ JPEG تلقائياً ⚡</span>
+                    <span style="font-size:11px; color:#aaa; font-family:monospace;">[ WEBP COMPRESSED ]</span>
                 </div>
-                <span style="color:red; cursor:pointer; font-weight:bold;" onclick="clearImage()">حذف ×</span>
+                <span style="color:var(--error-color); cursor:pointer; font-weight:bold; font-size:12px;" onclick="clearImage()">× حذف</span>
             </div>
 
             <div class="chat-input-area">
                 <button class="icon-btn" onclick="document.getElementById('imageInput').click()">📎</button>
                 <input type="file" id="imageInput" accept="image/*" style="display:none;" onchange="handleImageUpload()">
-                <input type="text" id="user-chat-input" placeholder="اكتب رسالتك لـ NayroVex...">
+                <input type="text" id="user-chat-input" placeholder="أدخل الأمر أو الرسالة لـ NayroVex...">
                 <button class="send-btn" onclick="sendMessageToAI()">إرسال</button>
             </div>
         </div>
 
         <div class="modal-overlay" id="summaryModal">
             <div class="modal-content">
-                <div class="modal-header">معاينة تلخيص الجلسة</div>
+                <div class="modal-header">📄 معاينة سجل الجلسة</div>
                 <div class="modal-body" id="modalBodyText"></div>
                 <div class="modal-footer">
-                    <button class="modal-btn cancel" onclick="closeSummaryModal()">إلغاء</button>
-                    <button class="modal-btn confirm" onclick="downloadChatHistory()">تحميل الملف</button>
+                    <button class="futuristic-btn danger" onclick="closeSummaryModal()">إلغاء</button>
+                    <button class="futuristic-btn" style="color:#000; background:var(--accent-color);" onclick="downloadChatHistory()">تحميل</button>
                 </div>
             </div>
         </div>
 
         <script>
             let currentBase64Image = null;
-            
-            // لحفظ الطلب الأخير بنسخته الكاملة (النص + الصورة إن وجدت)
             let lastUserRequest = { prompt: '', image: null }; 
 
-            window.onload = () => { addMessage("أهلاً بك! ارفع شارت تداول وسأقوم بتحليله لك فوراً.", "ai", "success"); };
+            window.onload = () => { addMessage("تم تفعيل الاتصال بالنظام. ارفع شارت تداول وسأقوم بتحليله لك فوراً.", "ai", "success"); };
 
             function scrollToBottom() {
                 const chatMessages = document.getElementById('chat-messages');
-                chatMessages.scrollTop = chatMessages.scrollHeight;
+                const isScrolledToBottom = chatMessages.scrollHeight - chatMessages.clientHeight <= chatMessages.scrollTop + 100;
+                
+                if (isScrolledToBottom) {
+                    chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: 'smooth' });
+                }
             }
 
             function addMessage(text, role = "ai", statusType = "normal", imageBase64 = null) {
@@ -228,7 +292,7 @@ app.get('/', (req, res) => {
                     img.src = imageBase64;
                     img.style.maxWidth = '150px'; img.style.borderRadius = '5px';
                     img.style.marginBottom = '5px'; img.style.display = 'block';
-                    img.onload = scrollToBottom; 
+                    img.style.border = '1px solid rgba(0, 255, 204, 0.2)';
                     msgBox.appendChild(img);
                 }
 
@@ -258,7 +322,7 @@ app.get('/', (req, res) => {
 
                     const retryBtn = document.createElement('button');
                     retryBtn.classList.add('action-btn');
-                    retryBtn.innerHTML = '🔄 إعادة التحليل';
+                    retryBtn.innerHTML = '🔄 إعادة';
                     retryBtn.onclick = () => {
                         if (lastUserRequest.prompt || lastUserRequest.image) {
                             addMessage(\`إعادة المحاولة: \${lastUserRequest.prompt || 'تحليل الشارت'}\`, "user", "normal", lastUserRequest.image);
@@ -277,9 +341,17 @@ app.get('/', (req, res) => {
                 scrollToBottom();
             }
 
+            // تحسين 1 & 4: حماية حدود الرفع ومعالجة الصور الكبيرة بنسب مضبوطة
             function handleImageUpload() {
                 const file = document.getElementById('imageInput').files[0];
                 if (!file) return;
+
+                // منع رفع أي ملف يتعدى الـ 10 ميجابايت كحماية أولية
+                if (file.size > 10 * 1024 * 1024) {
+                    alert('ملف الصورة كبير جداً! الحد الأقصى المسموح به هو 10MB.');
+                    document.getElementById('imageInput').value = '';
+                    return;
+                }
 
                 const reader = new FileReader();
                 reader.onload = function(e) {
@@ -289,7 +361,8 @@ app.get('/', (req, res) => {
                         let width = img.width;
                         let height = img.height;
 
-                        const max_size = 800; 
+                        // تقليل المقاسات لو كانت الصورة عملاقة مع الحفاظ على النسبة
+                        const max_size = 600; 
                         if (width > height && width > max_size) { height *= max_size / width; width = max_size; }
                         else if (height > max_size) { width *= max_size / height; height = max_size; }
 
@@ -297,7 +370,7 @@ app.get('/', (req, res) => {
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
 
-                        currentBase64Image = canvas.toDataURL('image/jpeg', 0.6);
+                        currentBase64Image = canvas.toDataURL('image/webp', 0.4);
 
                         document.getElementById('image-preview').src = currentBase64Image;
                         document.getElementById('image-preview-container').style.display = 'flex';
@@ -324,7 +397,12 @@ app.get('/', (req, res) => {
                     messageText = "حلل هذا الشارت مستخدماً الـ SMC والسيولة.";
                 }
 
-                // حفظ الطلب كاملاً مع الصورة لإعادة التحليل الذكية
+                // تحسين 4: قيد نصي لمنع الإغراق
+                if (messageText.length > 500) {
+                    alert('النص طويل جداً! الحد الأقصى هو 500 حرف.');
+                    return;
+                }
+
                 lastUserRequest = { prompt: messageText, image: currentBase64Image };
 
                 addMessage(messageText, "user", "normal", currentBase64Image);
@@ -338,7 +416,7 @@ app.get('/', (req, res) => {
                 const loadingBox = document.getElementById('typing-box');
                 const typingText = document.getElementById('typing-text');
                 
-                typingText.innerText = imageBase64 ? "جاري فحص الشارت وتحديد الـ Order Blocks" : "جاري التفكير وصياغة الرد";
+                typingText.innerText = imageBase64 ? "فحص البروتوكول وتحديد الـ Blocks" : "صياغة تحليل الشبكة";
                 loadingBox.style.display = 'block';
                 scrollToBottom();
 
@@ -364,10 +442,11 @@ app.get('/', (req, res) => {
                     }
                 } catch (error) { 
                     loadingBox.style.display = 'none';
-                    addMessage("⚠️ فشل الاتصال بالسيرفر!", "ai", "error"); 
+                    addMessage("⚠️ فشل الاتصال بالسيرفر! الشبكة غير مستقرة.", "ai", "error"); 
                 }
             }
 
+            // تحسين 3: تقسيم الردود الذكي بطريقة مريحة للعين
             function simulateMultipleBubbles(fullText, statusType = "normal") {
                 if (!fullText) return addMessage("⚠️ لم أتلق ردًا من AI.", "ai", "error");
                 
@@ -398,7 +477,6 @@ app.get('/', (req, res) => {
                 });
             }
 
-            // توليد نص الملخص
             function generateLogText() {
                 const messages = document.querySelectorAll('.message-wrapper');
                 let log = "--- NayroVex Terminal Chat Summary ---\\n\\n";
@@ -410,7 +488,6 @@ app.get('/', (req, res) => {
                 return log;
             }
 
-            // فتح نافذة المعاينة
             function openSummaryModal() {
                 const modal = document.getElementById('summaryModal');
                 const modalBody = document.getElementById('modalBodyText');
@@ -422,7 +499,6 @@ app.get('/', (req, res) => {
                 document.getElementById('summaryModal').style.display = 'none';
             }
 
-            // تنزيل الملف
             function downloadChatHistory() {
                 const log = generateLogText();
                 const blob = new Blob([log], { type: 'text/plain;charset=utf-8' });
@@ -433,9 +509,8 @@ app.get('/', (req, res) => {
                 closeSummaryModal();
             }
 
-            // حذف كل الجلسة من السيرفر ومن الواجهة
             async function clearFullSession() {
-                if(!confirm("هل أنت متأكد من رغبتك في مسح كل سجل الجلسة؟")) return;
+                if(!confirm("سيتم تصفير سجل الجلسة بالكامل. هل أنت متأكد؟")) return;
                 
                 try {
                     await fetch('/api/clear', { method: 'POST' });
@@ -443,7 +518,7 @@ app.get('/', (req, res) => {
 
                 document.getElementById('chat-messages').innerHTML = '';
                 lastUserRequest = { prompt: '', image: null };
-                addMessage("تم مسح الجلسة، وبدء محادثة جديدة.", "ai", "success");
+                addMessage("تم تصفير السجل بنجاح. النظام جاهز مجدداً.", "ai", "success");
             }
 
             document.getElementById('user-chat-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessageToAI(); });
@@ -464,7 +539,6 @@ app.get('/', (req, res) => {
     `);
 });
 
-// إضافة مسار خاص لحذف جلسة الـ IP
 app.post('/api/clear', (req, res) => {
     const forwarded = req.headers['x-forwarded-for'];
     const userIP = forwarded ? forwarded.split(',')[0].trim() : req.socket.remoteAddress;
@@ -483,6 +557,7 @@ app.post('/api/chat', async (req, res) => {
         const forwarded = req.headers['x-forwarded-for'];
         const userIP = forwarded ? forwarded.split(',')[0].trim() : req.socket.remoteAddress;
 
+        // حماية أمنية من السيرفر للنصوص الطويلة جداً
         if (userMessage && userMessage.length > 500) userMessage = userMessage.slice(0, 500);
 
         if (!sessions[userIP]) sessions[userIP] = { history: [], lastUsed: Date.now() };
@@ -512,15 +587,19 @@ ${conversation}
         const API_KEY = process.env.GEMINI_API_KEY || process.env.SECRET_KEY;
         if (!API_KEY) return res.status(500).json({ reply: "⚠️ مفتاح Gemini غير موجود في بيئة الـ Node.", error: true });
 
-        const geminiParts = [];
+        const geminiContents = [];
+        const parts = [];
+
         if (imageBase64) {
-            geminiParts.push({ inline_data: { mime_type: "image/jpeg", data: imageBase64 } });
+            parts.push({ inline_data: { mime_type: "image/webp", data: imageBase64 } });
         }
-        geminiParts.push({ text: prompt });
+        parts.push({ text: prompt });
+
+        geminiContents.push({ parts: parts });
 
         const response = await axios.post(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
-            { contents: [{ parts: geminiParts }] },
+            { contents: geminiContents },
             { headers: { 'Content-Type': 'application/json' } }
         );
 
