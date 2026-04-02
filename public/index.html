@@ -13,6 +13,8 @@
             --danger-color: #ff3366;
             --success-color: #00ff88;
             --neutral-border: rgba(0, 255, 204, 0.2);
+            --chat-primary: #0055ff;
+            --chat-text: #00d2ff;
         }
         body {
             background-color: var(--bg-color);
@@ -23,6 +25,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            min-height: 100vh;
         }
         .container {
             width: 100%;
@@ -32,7 +35,7 @@
             border-radius: 15px;
             box-shadow: 0 5px 15px rgba(0, 255, 204, 0.1);
             border: 1px solid var(--neutral-border);
-            transition: all 0.5s ease;
+            margin-bottom: 20px;
         }
         h1 {
             text-align: center;
@@ -57,11 +60,8 @@
             border-radius: 8px;
             font-size: 16px;
             outline: none;
-            transition: border-color 0.3s;
         }
-        input:focus {
-            border-color: var(--accent-color);
-        }
+        input:focus { border-color: var(--accent-color); }
         button {
             background: var(--accent-color);
             color: #000;
@@ -72,9 +72,34 @@
             cursor: pointer;
             transition: 0.3s;
         }
-        button:hover {
-            opacity: 0.9;
-            box-shadow: 0 0 10px var(--accent-color);
+        button:hover { opacity: 0.9; box-shadow: 0 0 10px var(--accent-color); }
+        
+        /* 📥 صندوق الشات المدمج */
+        #chat-container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--card-bg);
+            border-radius: 15px;
+            border: 1px solid var(--neutral-border);
+            display: flex;
+            flex-direction: column;
+            height: 320px;
+            box-shadow: 0 5px 15px rgba(0, 255, 204, 0.05);
+        }
+        #chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .chat-input-group {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 0 0 15px 15px;
         }
         .result-box {
             background: #0a0a0f;
@@ -84,44 +109,23 @@
             display: none;
             border: 1px solid #222;
         }
-        #aiReason {
-            line-height: 1.6;
-            max-height: 150px;
-            overflow-y: auto;
-            padding-right: 5px;
-        }
-        #aiReason::-webkit-scrollbar { width: 5px; }
-        #aiReason::-webkit-scrollbar-thumb { background-color: #333; border-radius: 10px; }
-        .loading {
-            text-align: center;
-            color: var(--accent-color);
-            display: none;
-            margin-top: 10px;
-            font-weight: bold;
-        }
+        .loading { text-align: center; color: var(--accent-color); display: none; margin-top: 10px; font-weight: bold; }
         .success { color: var(--success-color); font-weight: bold;}
         .danger { color: var(--danger-color); font-weight: bold;}
-        
-        @media all and (display-mode: standalone) {
-            body { padding-top: 40px; }
-        }
     </style>
 </head>
 <body>
 
     <div class="container" id="mainContainer">
         <h1>Elite Terminal AI</h1>
-        
         <div class="input-group">
             <input type="text" id="symbolInput" placeholder="أدخل رمز العملة (مثال: btc, sol)">
             <button id="analyzeBtn">تحليل</button>
         </div>
-
         <div id="loading" class="loading">جاري استشارة الذكاء الاصطناعي...</div>
-
         <div id="resultBox" class="result-box">
             <h3 id="coinTitle" style="color: var(--accent-color); margin-top: 0;"></h3>
-            <div id="aiReason"></div>
+            <div id="aiReason" style="line-height: 1.6; max-height: 150px; overflow-y: auto;"></div>
             <hr style="border-color: #222;">
             <p>💰 سعر الدخول المقترح: <span id="entryPrice"></span></p>
             <p>🎯 الهدف (Target): <span id="targetPrice"></span></p>
@@ -129,10 +133,24 @@
         </div>
     </div>
 
+    <div id="chat-container">
+        <div id="chat-messages">
+            <div style="align-self: flex-start; background: #1a1a24; color: var(--chat-text); padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; text-align: right; border-left: 3px solid var(--chat-primary);">
+                أهلاً بك في المحادثة المباشرة! اسألني أي شيء أو اطلب "تحليل BTC" مثلاً.
+            </div>
+        </div>
+        <div class="chat-input-group">
+            <input type="text" id="user-chat-input" placeholder="تحدث مع الذكاء الاصطناعي..." style="font-size: 14px; padding: 10px;">
+            <button onclick="sendMessageToAI()" style="padding: 0 15px; margin-right: 8px; background: var(--chat-primary); color: #fff;">إرسال</button>
+        </div>
+    </div>
+
+    <button onclick="window.location.reload(true)" style="margin-top: 15px; background: #222; color: #fff; font-size: 12px; padding: 5px 10px;">تحديث الصفحة الإجباري</button>
+
     <script>
-        // ميزة استخدام نفس السيرفر لطلب الـ API تلقائيًا
         const API_URL = window.location.origin;
 
+        // --- أكواد التحليل ---
         const symbolInput = document.getElementById('symbolInput');
         const analyzeBtn = document.getElementById('analyzeBtn');
 
@@ -143,14 +161,10 @@
             const symbol = symbolInput.value.trim();
             const loading = document.getElementById('loading');
             const resultBox = document.getElementById('resultBox');
-            const mainContainer = document.getElementById('mainContainer');
             
             if(!symbol) { alert('الرجاء إدخال رمز العملة أولاً!'); return; }
-
             loading.style.display = 'block';
             resultBox.style.display = 'none';
-            mainContainer.style.borderColor = "rgba(0, 255, 204, 0.2)";
-            mainContainer.style.boxShadow = "0 5px 15px rgba(0, 255, 204, 0.1)";
 
             try {
                 const response = await fetch(`${API_URL}/api/analyze/${symbol}`);
@@ -161,29 +175,69 @@
                     const data = resData.data;
                     document.getElementById('coinTitle').innerText = `تحليل عملة ${data.symbol}`;
                     document.getElementById('aiReason').innerText = data.reason;
-                    
-                    document.getElementById('entryPrice').innerHTML = data.entry ? `<span class="success">${data.entry} $</span>` : "<span>-</span>";
-                    document.getElementById('targetPrice').innerHTML = data.target ? `<span class="success">${data.target} $</span>` : "<span>-</span>";
-                    document.getElementById('stopLoss').innerHTML = data.stopLoss ? `<span class="danger">${data.stopLoss} $</span>` : "<span>-</span>";
-                    
-                    if (data.hasOpportunity) {
-                        mainContainer.style.borderColor = "var(--success-color)";
-                        mainContainer.style.boxShadow = "0 5px 20px rgba(0, 255, 136, 0.2)";
-                    } else {
-                        mainContainer.style.borderColor = "var(--danger-color)";
-                        mainContainer.style.boxShadow = "0 5px 20px rgba(255, 51, 102, 0.15)";
-                    }
-
+                    document.getElementById('entryPrice').innerHTML = `<span class="success">${data.entry} $</span>`;
+                    document.getElementById('targetPrice').innerHTML = `<span class="success">${data.target} $</span>`;
+                    document.getElementById('stopLoss').innerHTML = `<span class="danger">${data.stopLoss} $</span>`;
                     resultBox.style.display = 'block';
-                } else {
-                    alert('خطأ: ' + resData.message);
                 }
             } catch (error) {
                 loading.style.display = 'none';
                 alert('حدث خطأ أثناء الاتصال بالسيرفر.');
-                console.error(error);
             }
         }
+
+        // --- أكواد الشات ---
+        function addMessage(text, isUser = false) {
+            const chatMessages = document.getElementById('chat-messages');
+            chatMessages.innerHTML += `
+                <div style="align-self: ${isUser ? 'flex-end' : 'flex-start'}; background: ${isUser ? '#0055ff' : '#1a1a24'}; color: ${isUser ? '#fff' : '#00d2ff'}; padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; text-align: right; border-left: ${isUser ? 'none' : '3px solid #0055ff'};">
+                    ${text}
+                </div>`;
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        async function sendMessageToAI() {
+            const inputField = document.getElementById('user-chat-input');
+            const messageText = inputField.value.trim();
+            if (messageText === '') return;
+
+            addMessage(messageText, true);
+            inputField.value = '';
+
+            const chatMessages = document.getElementById('chat-messages');
+            const loadingId = 'loading-' + Date.now();
+            chatMessages.innerHTML += `<div id="${loadingId}" style="align-self: flex-start; background: #1a1a24; color: #00d2ff; padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; text-align: right; border-left: 3px solid #0055ff;">جاري التفكير... ⏳</div>`;
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            try {
+                let response;
+                const coinMatch = messageText.match(/تحليل\s+(\w+)/i);
+                
+                if (coinMatch) {
+                    const symbol = coinMatch[1].toUpperCase();
+                    response = await fetch(`/api/analyze/${symbol}`);
+                    const data = await response.json();
+                    document.getElementById(loadingId)?.remove();
+                    addMessage(`📊 **تحليل عملة ${symbol}**:\n${data.data.reason}`);
+                } else {
+                    response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prompt: messageText })
+                    });
+                    const data = await response.json();
+                    document.getElementById(loadingId)?.remove();
+                    addMessage(data.reply);
+                }
+            } catch (error) {
+                document.getElementById(loadingId)?.remove();
+                addMessage("⚠️ خطأ في الاتصال!", false);
+            }
+        }
+
+        document.getElementById('user-chat-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); sendMessageToAI(); }
+        });
     </script>
 </body>
 </html>
