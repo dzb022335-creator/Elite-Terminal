@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios'); // الاعتماد على أكسيوس لضمان استقرار فيرسل
+const axios = require('axios');
 require('dotenv').config();
 
 const app = express();
@@ -23,7 +23,7 @@ setInterval(() => {
     }
 }, 1000 * 60 * 5);
 
-// حل مشكلة Cannot GET / بعرض الواجهة مباشرة
+// الصفحة الرئيسية مدمجة بشاشة كاملة وميزة النسخ
 app.get('/', (req, res) => {
     res.send(`
     <!DOCTYPE html>
@@ -44,91 +44,212 @@ app.get('/', (req, res) => {
                 --chat-primary: #0055ff;
                 --chat-text: #00d2ff;
             }
+            * { box-sizing: border-box; }
             body {
                 background-color: var(--bg-color);
                 color: var(--text-color);
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                 margin: 0;
-                padding: 10px;
+                padding: 0;
                 display: flex;
                 flex-direction: column;
-                align-items: center;
-                min-height: 100vh;
+                height: 100vh;
+                overflow: hidden;
             }
-            .container {
-                width: 100%;
-                max-width: 500px;
-                background: var(--card-bg);
-                padding: 20px;
-                border-radius: 15px;
-                border: 1px solid var(--neutral-border);
-                margin-bottom: 20px;
-                box-sizing: border-box;
+            
+            /* الهيدر العلوي الصغير */
+            header {
+                background: #101018;
+                border-bottom: 1px solid var(--neutral-border);
+                padding: 10px 15px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                height: 60px;
             }
             h1 {
-                text-align: center;
                 color: var(--accent-color);
-                font-size: 24px;
-                margin-bottom: 20px;
+                font-size: 18px;
+                margin: 0;
                 text-transform: uppercase;
                 text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
             }
-            .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
-            input { flex: 1; background: #0a0a0f; border: 1px solid #333; color: #fff; padding: 12px; border-radius: 8px; font-size: 16px; outline: none; }
-            input:focus { border-color: var(--accent-color); }
-            button { background: var(--accent-color); color: #000; border: none; padding: 0 20px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; }
-            button:hover { opacity: 0.9; box-shadow: 0 0 10px var(--accent-color); }
+            .top-inputs {
+                display: flex;
+                gap: 8px;
+                align-items: center;
+            }
+            .top-inputs input {
+                background: #05050a;
+                border: 1px solid #333;
+                color: #fff;
+                padding: 6px 10px;
+                border-radius: 6px;
+                font-size: 12px;
+                outline: none;
+                width: 100px;
+            }
+            .top-inputs button {
+                background: var(--accent-color);
+                color: #000;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 12px;
+                cursor: pointer;
+            }
             
-            #chat-container { width: 100%; max-width: 500px; background: var(--card-bg); border-radius: 15px; border: 1px solid var(--neutral-border); display: flex; flex-direction: column; height: 320px; }
-            #chat-messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-            .chat-input-group { display: flex; padding: 10px; border-top: 1px solid rgba(255, 255, 255, 0.05); }
-            .result-box { background: #0a0a0f; padding: 15px; border-radius: 10px; margin-top: 15px; display: none; border: 1px solid #222; }
-            .loading { text-align: center; color: var(--accent-color); display: none; margin-top: 10px; font-weight: bold; }
+            /* الشات كامل الشاشة */
+            #chat-container {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                background: var(--bg-color);
+                overflow: hidden;
+            }
+            #chat-messages {
+                flex: 1;
+                padding: 15px;
+                overflow-y: auto;
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            /* فقاعة الرسالة */
+            .message-wrapper {
+                display: flex;
+                flex-direction: column;
+                max-width: 85%;
+            }
+            .message-wrapper.user { align-self: flex-end; }
+            .message-wrapper.ai { align-self: flex-start; }
+            
+            .msg-box {
+                padding: 12px;
+                border-radius: 12px;
+                font-size: 14px;
+                line-height: 1.5;
+                white-space: pre-wrap;
+                position: relative;
+            }
+            .user .msg-box {
+                background: var(--chat-primary);
+                color: #fff;
+                border-bottom-right-radius: 2px;
+            }
+            .ai .msg-box {
+                background: var(--card-bg);
+                color: var(--text-color);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                border-bottom-left-radius: 2px;
+            }
+            
+            /* زر النسخ */
+            .copy-btn {
+                align-self: flex-start;
+                background: transparent;
+                border: none;
+                color: #666;
+                font-size: 12px;
+                cursor: pointer;
+                margin-top: 4px;
+                display: flex;
+                align-items: center;
+                gap: 3px;
+                padding: 2px 5px;
+                border-radius: 4px;
+            }
+            .copy-btn:hover { color: var(--accent-color); background: rgba(255,255,255,0.05); }
+            
+            /* الصندوق السفلي للكتابة */
+            .chat-input-area {
+                background: #101018;
+                border-top: 1px solid rgba(255, 255, 255, 0.05);
+                padding: 12px;
+                display: flex;
+                gap: 10px;
+                align-items: center;
+            }
+            .chat-input-area input {
+                flex: 1;
+                background: #05050a;
+                border: 1px solid #222;
+                color: #fff;
+                padding: 12px;
+                border-radius: 10px;
+                font-size: 14px;
+                outline: none;
+            }
+            .chat-input-area input:focus { border-color: var(--chat-text); }
+            .chat-input-area button {
+                background: var(--chat-primary);
+                color: #fff;
+                border: none;
+                padding: 12px 20px;
+                border-radius: 10px;
+                font-weight: bold;
+                cursor: pointer;
+            }
+            
+            /* جزء التحليل العائم (إذا نجح التحليل) */
+            .analysis-result {
+                background: #14141f;
+                border-top: 1px solid var(--accent-color);
+                padding: 15px;
+                display: none;
+            }
         </style>
     </head>
     <body>
 
-        <div class="container">
-            <h1>Elite Terminal AI</h1>
-            <div class="input-group">
-                <input type="text" id="symbolInput" placeholder="أدخل رمز العملة (مثال: btc, sol)">
+        <header>
+            <h1>NayroVex AI</h1>
+            <div class="top-inputs">
+                <input type="text" id="symbolInput" placeholder="btc, sol...">
                 <button id="analyzeBtn">تحليل</button>
             </div>
-            <div id="loading" class="loading">جاري استشارة الذكاء الاصطناعي...</div>
-            <div id="resultBox" class="result-box">
-                <h3 id="coinTitle" style="color: var(--accent-color); margin-top: 0;"></h3>
-                <div id="aiReason" style="line-height: 1.6; max-height: 150px; overflow-y: auto;"></div>
-                <hr style="border-color: #222;">
-                <p>💰 سعر الدخول المقترح: <span id="entryPrice"></span></p>
-                <p>🎯 الهدف (Target): <span id="targetPrice"></span></p>
-                <p>🛑 وقف الخسارة: <span id="stopLoss"></span></p>
-            </div>
-        </div>
+        </header>
 
         <div id="chat-container">
             <div id="chat-messages"></div>
-            <div class="chat-input-group">
-                <input type="text" id="user-chat-input" placeholder="تحدث مع الذكاء الاصطناعي..." style="font-size: 14px;">
-                <button onclick="sendMessageToAI()" style="padding: 0 15px; margin-right: 8px; background: var(--chat-primary); color: #fff;">إرسال</button>
+            
+            <div class="chat-input-area">
+                <input type="text" id="user-chat-input" placeholder="اكتب رسالتك لـ NayroVex...">
+                <button onclick="sendMessageToAI()">إرسال</button>
             </div>
         </div>
 
         <script>
-            window.onload = () => { addMessage("أهلاً بك! أنا NayroVex، اسألني عن التداول أو أي شيء آخر.", false); };
+            window.onload = () => { addMessage("أهلاً بك يا صديقي! أنا مستعد لتحليل صفقاتك أو مناقشة أي موضوع تريده.", false); };
 
             function addMessage(text, isUser = false) {
                 const chatMessages = document.getElementById('chat-messages');
-                const msg = document.createElement('div');
-                msg.style.alignSelf = isUser ? 'flex-end' : 'flex-start';
-                msg.style.background = isUser ? '#0055ff' : '#1a1a24';
-                msg.style.color = isUser ? '#fff' : '#00d2ff';
-                msg.style.padding = '8px 12px';
-                msg.style.borderRadius = '8px';
-                msg.style.maxWidth = '80%';
-                msg.style.fontSize = '13px';
-                msg.style.whiteSpace = 'pre-wrap';
-                msg.textContent = text;
-                chatMessages.appendChild(msg);
+                
+                const wrapper = document.createElement('div');
+                wrapper.classList.add('message-wrapper', isUser ? 'user' : 'ai');
+                
+                const msgBox = document.createElement('div');
+                msgBox.classList.add('msg-box');
+                msgBox.innerText = text;
+                
+                wrapper.appendChild(msgBox);
+                
+                // إضافة زر النسخ لرسائل الـ AI فقط
+                if (!isUser) {
+                    const copyBtn = document.createElement('button');
+                    copyBtn.classList.add('copy-btn');
+                    copyBtn.innerHTML = '📋 نسخ';
+                    copyBtn.onclick = () => {
+                        navigator.clipboard.writeText(text);
+                        copyBtn.innerHTML = '✅ تم النسخ';
+                        setTimeout(() => copyBtn.innerHTML = '📋 نسخ', 1500);
+                    };
+                    wrapper.appendChild(copyBtn);
+                }
+                
+                chatMessages.appendChild(wrapper);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             }
 
@@ -147,7 +268,7 @@ app.get('/', (req, res) => {
                         body: JSON.stringify({ prompt: messageText })
                     });
                     const data = await response.json();
-                    addMessage(data.reply || "⚠️ خطأ في الاستجابة", false);
+                    addMessage(data.reply || "⚠️ حدث خطأ في الاستجابة", false);
                 } catch (error) {
                     addMessage("⚠️ فشل الاتصال بالسيرفر!", false);
                 }
@@ -155,31 +276,26 @@ app.get('/', (req, res) => {
 
             document.getElementById('user-chat-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessageToAI(); });
             
-            // ربط زر التحليل
+            // زر التحليل (المؤقت الحقيقي)
             document.getElementById('analyzeBtn').addEventListener('click', async () => {
                 const symbol = document.getElementById('symbolInput').value.trim();
-                const loading = document.getElementById('loading');
-                const resultBox = document.getElementById('resultBox');
+                if(!symbol) return alert('أدخل رمز العملة!');
                 
-                if(!symbol) { alert('الرجاء إدخال رمز العملة أولاً!'); return; }
-                loading.style.display = 'block'; resultBox.style.display = 'none';
-
-                try {
-                    const response = await fetch(\`/api/analyze/\${symbol}\`);
-                    const resData = await response.json();
-                    loading.style.display = 'none';
-
-                    if(resData.success) {
-                        const data = resData.data;
-                        document.getElementById('coinTitle').innerText = \`تحليل عملة \${data.symbol}\`;
-                        document.getElementById('aiReason').innerText = data.reason;
-                        document.getElementById('entryPrice').innerHTML = \`<span style="color: var(--success-color);">\${data.entry} $</span>\`;
-                        document.getElementById('targetPrice').innerHTML = \`<span style="color: var(--success-color);">\${data.target} $</span>\`;
-                        document.getElementById('stopLoss').innerHTML = \`<span style="color: var(--danger-color);">\${data.stopLoss} $</span>\`;
-                        resultBox.style.display = 'block';
-                    }
-                } catch (error) { loading.style.display = 'none'; alert('خطأ في جلب التحليل.'); }
+                addMessage(\`ما هو تحليلك لعملة \${symbol}؟\`, true);
+                sendMessageToAIDirectly(\`أعطني تحليلاً لعملة \${symbol} فوراً بالأرقام كمتداول محترف.\`);
             });
+            
+            async function sendMessageToAIDirectly(customText) {
+                try {
+                    const response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prompt: customText })
+                    });
+                    const data = await response.json();
+                    addMessage(data.reply || "⚠️ خطأ في الاستجابة", false);
+                } catch (error) { addMessage("⚠️ فشل الاتصال!", false); }
+            }
         </script>
     </body>
     </html>
@@ -208,14 +324,16 @@ app.post('/api/chat', async (req, res) => {
             .join('\n');
 
         const prompt = `
-أنت NayroVex AI، مساعد ذكي ومحلل تقني محترف ومختص في العملات الرقمية.
-تكلم باللغة العربية الفصحى بطريقة ذكية، ودودة ومختصرة.
-🚨 قواعد هامة:
-1. إذا سألك المستخدم عن التداول، جاوبه بناءً على (SMC، تحليل السيولة، الـ Order Blocks، ومستويات الـ Fibonacci) كخبير متداول.
-2. إذا كانت دردشة عامة، تفاعل كصديق ومستشار بالفصحى.
-3. اطرح في نهاية ردك سؤالاً عكسياً ذكياً ومحفزاً لفتح نقاش مستمر.
+أنت NayroVex AI، مساعد ذكي ومحلل تقني محترف ومحاور جريء في أسواق العملات الرقمية.
+تكلم باللغة العربية الفصحى بطريقة ذكية، ودودة ومختصرة جداً.
 
-المحادثة السابقة:
+🚨 قواعد صارمة لشخصيتك وأسلوبك:
+1. ممنوع منعا باتا تكرار الديباجة والمقدمة في كل رسالة (مثل: أنا أعتمد على SMC وغيرها..). ادخل في صلب الموضوع فوراً دون فلسفة زائدة.
+2. إذا طلب منك المستخدم تحليلاً أو صفقة لعملة معينة، لا تتردد ولا تختلق أعذاراً لحماية نفسك! أعطه تحليلاً مبنياً على (SMC، السيولة، الـ Order Blocks، ومستويات الـ Fibonacci).
+3. عندما يحدد لك المستخدم الفريم ونوع الصفقة، يجب أن تتضمن إجابتك أرقاماً واضحة لـ: (منطقة الدخول المرجحة، الأهداف المقترحة Target، ووقف الخسارة Stop Loss).
+4. في نهاية ردك، اطرح سؤالاً عكسياً ذكياً ومحفزاً لفتح نقاش مستمر.
+
+المحادثة السابقة للرجوع إليها:
 ${conversation}
 
 الرد بالفصحى (NayroVex):`;
@@ -223,7 +341,6 @@ ${conversation}
         const API_KEY = process.env.GEMINI_API_KEY || process.env.SECRET_KEY;
         if (!API_KEY) return res.status(500).json({ reply: "⚠️ مفتاح Gemini غير موجود." });
 
-        // التحدث مع Gemini باستخدام Axios بدلاً من fetch
         const response = await axios.post(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
             { contents: [{ parts: [{ text: prompt }] }] },
@@ -238,19 +355,6 @@ ${conversation}
         console.error('API Error:', err.response ? err.response.data : err.message);
         res.status(500).json({ reply: "⚠️ حدث خطأ أثناء التفكير!" });
     }
-});
-
-// مسار التحليلات (الوهمي حالياً)
-app.get('/api/analyze/:symbol', (req, res) => {
-    const symbol = req.params.symbol.toUpperCase();
-    res.json({
-        success: true,
-        data: {
-            symbol: symbol,
-            reason: `تم فحص العملة بناءً على مناطق الـ Order Block ومستويات الفيبوناتشي. العملة تظهر ارتداداً جيداً من منطقة سيولة قوية.`,
-            entry: "66281.00", target: "71583.48", stopLoss: "63629.76"
-        }
-    });
 });
 
 app.listen(PORT, () => { console.log(`Server is running on port ${PORT}`); });
