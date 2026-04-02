@@ -1,17 +1,7 @@
 {
-  "name": "nayrovex-backend",
+  "name": "elite-terminal",
   "version": "1.0.0",
-  "description": "Backend لتطبيق NayroVex AI لتحليل العملات الرقمية",
-  "main": "api/chat.js",
-  "scripts": {
-    "start": "node api/chat.js"
-  },
-  "author": "Jon Sina",
-  "license": "MIT",
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "axios": "^1.6.0",
-    "dotenv": "^16.3.1"
+    "@google/genai": "^0.1.1"
   }
 }
