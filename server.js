@@ -7,7 +7,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-// تقييد الحجم لـ 4 ميجابايت كحد أقصى لحماية السيرفر من الانهيار
 app.use(express.json({ limit: '4mb' })); 
 
 const sessions = {}; 
@@ -22,7 +21,6 @@ setInterval(() => {
     }
 }, 1000 * 60 * 5);
 
-// حل مشكلة Cannot GET / بعرض الواجهة مباشرة في الصفحة الرئيسية
 app.get('/', (req, res) => {
     res.send(`
     <!DOCTYPE html>
@@ -62,7 +60,7 @@ app.get('/', (req, res) => {
             #chat-messages {
                 flex: 1; padding: 15px;
                 overflow-y: auto; display: flex;
-                flex-direction: column; gap: 15px;
+                flex-direction: column; gap: 24px;
                 padding-bottom: 90px;
                 background: var(--bg-color);
                 scroll-behavior: smooth;
@@ -78,20 +76,31 @@ app.get('/', (req, res) => {
             .user .msg-box { background: var(--chat-primary); color: #fff; border-bottom-right-radius: 2px; }
             .ai .msg-box { background: var(--card-bg); color: var(--text-color); border: 1px solid rgba(255, 255, 255, 0.04); border-bottom-left-radius: 2px; }
             
-            /* ألوان مخصصة حسب نوع الحالة */
             .ai.error-msg .msg-box { border: 1px solid var(--error-color); color: var(--error-color); }
             .ai.success-msg .msg-box { border: 1px solid var(--success-color); }
 
-            .copy-btn {
-                position: absolute; bottom: -20px; left: 5px;
+            .btn-group {
+                display: flex; gap: 8px;
+                position: absolute; bottom: -22px; left: 5px;
+                opacity: 0; transition: 0.2s;
+            }
+            .message-wrapper.ai:hover .btn-group { opacity: 1; }
+            
+            .action-btn {
                 background: rgba(255, 255, 255, 0.03);
                 border: 1px solid rgba(255, 255, 255, 0.05);
                 color: #777; font-size: 10px; cursor: pointer;
                 padding: 2px 6px; border-radius: 4px;
-                opacity: 0; transition: 0.2s;
             }
-            .message-wrapper.ai:hover .copy-btn { opacity: 1; }
-            .copy-btn:hover { color: var(--accent-color); }
+            .action-btn:hover { color: var(--accent-color); border-color: var(--accent-color); }
+            
+            .tooltip {
+                position: absolute; background: #000; color: #fff;
+                font-size: 11px; padding: 4px 8px; border-radius: 4px;
+                bottom: 30px; left: 5px; opacity: 0; transition: 0.3s;
+                pointer-events: none; border: 1px solid var(--accent-color);
+            }
+            .tooltip.show { opacity: 1; }
             
             #image-preview-container {
                 display: none; padding: 5px 15px;
@@ -125,14 +134,33 @@ app.get('/', (req, res) => {
             }
             .icon-btn { background: transparent; border: none; color: #777; font-size: 18px; cursor: pointer; padding: 5px; }
             .send-btn { background: var(--chat-primary); color: #fff; border: none; padding: 10px 18px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+
+            /* نافذة المعاينة (Modal) */
+            .modal-overlay {
+                display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center;
+            }
+            .modal-content {
+                background: var(--card-bg); width: 85%; max-width: 500px; max-height: 70vh;
+                border: 1px solid var(--neutral-border); border-radius: 12px; padding: 20px;
+                display: flex; flex-direction: column; gap: 15px;
+            }
+            .modal-header { font-weight: bold; color: var(--accent-color); border-bottom: 1px solid #1a1a24; padding-bottom: 10px; }
+            .modal-body { overflow-y: auto; font-size: 12px; color: #aaa; background: #08080c; padding: 10px; border-radius: 8px; white-space: pre-wrap; flex: 1; }
+            .modal-footer { display: flex; justify-content: flex-end; gap: 10px; }
+            .modal-btn { padding: 6px 15px; border-radius: 5px; font-size: 12px; cursor: pointer; font-weight: bold; }
+            .modal-btn.cancel { background: #222; color: #fff; border: 1px solid #333; }
+            .modal-btn.confirm { background: var(--accent-color); color: #000; border: none; }
         </style>
     </head>
     <body>
 
         <header>
             <h1>NayroVex Terminal</h1>
-            <div style="display:flex; gap:5px;">
-                <input type="text" id="symbolInput" placeholder="btc, sol..." style="width:60px; background:#050508; color:#fff; border:1px solid #1a1a24; border-radius:5px; padding:4px; font-size:12px;">
+            <div style="display:flex; gap:5px; align-items:center;">
+                <button onclick="openSummaryModal()" style="background:transparent; border:1px solid var(--neutral-border); color:#aaa; padding:4px 8px; border-radius:5px; font-size:11px; cursor:pointer;">📥 تلخيص</button>
+                <button onclick="clearFullSession()" style="background:transparent; border:1px solid #ff4a4a; color:#ff4a4a; padding:4px 8px; border-radius:5px; font-size:11px; cursor:pointer;">🗑️ مسح</button>
+                <input type="text" id="symbolInput" placeholder="btc, sol..." style="width:50px; background:#050508; color:#fff; border:1px solid #1a1a24; border-radius:5px; padding:4px; font-size:12px;">
                 <button id="analyzeBtn" style="background:var(--accent-color); color:#000; border:none; padding:4px 10px; border-radius:5px; font-weight:bold; font-size:12px; cursor:pointer;">حلل</button>
             </div>
         </header>
@@ -160,8 +188,22 @@ app.get('/', (req, res) => {
             </div>
         </div>
 
+        <div class="modal-overlay" id="summaryModal">
+            <div class="modal-content">
+                <div class="modal-header">معاينة تلخيص الجلسة</div>
+                <div class="modal-body" id="modalBodyText"></div>
+                <div class="modal-footer">
+                    <button class="modal-btn cancel" onclick="closeSummaryModal()">إلغاء</button>
+                    <button class="modal-btn confirm" onclick="downloadChatHistory()">تحميل الملف</button>
+                </div>
+            </div>
+        </div>
+
         <script>
             let currentBase64Image = null;
+            
+            // لحفظ الطلب الأخير بنسخته الكاملة (النص + الصورة إن وجدت)
+            let lastUserRequest = { prompt: '', image: null }; 
 
             window.onload = () => { addMessage("أهلاً بك! ارفع شارت تداول وسأقوم بتحليله لك فوراً.", "ai", "success"); };
 
@@ -196,15 +238,39 @@ app.get('/', (req, res) => {
                 wrapper.appendChild(msgBox);
                 
                 if (role === 'ai') {
+                    const btnGroup = document.createElement('div');
+                    btnGroup.classList.add('btn-group');
+
                     const copyBtn = document.createElement('button');
-                    copyBtn.classList.add('copy-btn');
+                    copyBtn.classList.add('action-btn');
                     copyBtn.innerHTML = '📋 نسخ';
+                    
+                    const tooltip = document.createElement('div');
+                    tooltip.classList.add('tooltip');
+                    tooltip.innerText = 'تم النسخ بنجاح! ✅';
+                    wrapper.appendChild(tooltip);
+
                     copyBtn.onclick = () => {
                         navigator.clipboard.writeText(text);
-                        copyBtn.innerHTML = '✅ تم';
-                        setTimeout(() => copyBtn.innerHTML = '📋 نسخ', 1000);
+                        tooltip.classList.add('show');
+                        setTimeout(() => tooltip.classList.remove('show'), 1500);
                     };
-                    wrapper.appendChild(copyBtn);
+
+                    const retryBtn = document.createElement('button');
+                    retryBtn.classList.add('action-btn');
+                    retryBtn.innerHTML = '🔄 إعادة التحليل';
+                    retryBtn.onclick = () => {
+                        if (lastUserRequest.prompt || lastUserRequest.image) {
+                            addMessage(\`إعادة المحاولة: \${lastUserRequest.prompt || 'تحليل الشارت'}\`, "user", "normal", lastUserRequest.image);
+                            executeFetchAI(lastUserRequest.prompt, lastUserRequest.image);
+                        } else {
+                            alert('لا يوجد طلب أخير لإعادة تحليله!');
+                        }
+                    };
+
+                    btnGroup.appendChild(copyBtn);
+                    btnGroup.appendChild(retryBtn);
+                    wrapper.appendChild(btnGroup);
                 }
                 
                 chatMessages.appendChild(wrapper);
@@ -223,7 +289,7 @@ app.get('/', (req, res) => {
                         let width = img.width;
                         let height = img.height;
 
-                        const max_size = 800; // خفضنا الأبعاد قليلاً لتسريع الاستجابة على Vercel
+                        const max_size = 800; 
                         if (width > height && width > max_size) { height *= max_size / width; width = max_size; }
                         else if (height > max_size) { width *= max_size / height; height = max_size; }
 
@@ -231,9 +297,8 @@ app.get('/', (req, res) => {
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
 
-                        // ضغط الجودة لـ 60% لتقليل الوزن وضمان تخطي مهلة Vercel
                         currentBase64Image = canvas.toDataURL('image/jpeg', 0.6);
-                        
+
                         document.getElementById('image-preview').src = currentBase64Image;
                         document.getElementById('image-preview-container').style.display = 'flex';
                         scrollToBottom();
@@ -251,32 +316,36 @@ app.get('/', (req, res) => {
 
             async function sendMessageToAI() {
                 const inputField = document.getElementById('user-chat-input');
-                const loadingBox = document.getElementById('typing-box');
-                const typingText = document.getElementById('typing-text');
-                
                 let messageText = inputField.value.trim();
                 
                 if (!messageText && !currentBase64Image) return;
 
                 if (!messageText && currentBase64Image) {
                     messageText = "حلل هذا الشارت مستخدماً الـ SMC والسيولة.";
-                    typingText.innerText = "جاري فحص الشارت وتحديد الـ Order Blocks";
-                } else {
-                    typingText.innerText = "جاري التفكير وصياغة الرد";
                 }
+
+                // حفظ الطلب كاملاً مع الصورة لإعادة التحليل الذكية
+                lastUserRequest = { prompt: messageText, image: currentBase64Image };
 
                 addMessage(messageText, "user", "normal", currentBase64Image);
                 inputField.value = '';
                 
-                const payload = { prompt: messageText };
-                if (currentBase64Image) {
-                    payload.image = currentBase64Image.split(',')[1];
-                }
-
+                executeFetchAI(messageText, currentBase64Image);
                 clearImage();
+            }
+
+            async function executeFetchAI(promptText, imageBase64 = null) {
+                const loadingBox = document.getElementById('typing-box');
+                const typingText = document.getElementById('typing-text');
                 
+                typingText.innerText = imageBase64 ? "جاري فحص الشارت وتحديد الـ Order Blocks" : "جاري التفكير وصياغة الرد";
                 loadingBox.style.display = 'block';
                 scrollToBottom();
+
+                const payload = { prompt: promptText };
+                if (imageBase64) {
+                    payload.image = imageBase64.split(',')[1];
+                }
 
                 try {
                     const response = await fetch('/api/chat', {
@@ -295,7 +364,7 @@ app.get('/', (req, res) => {
                     }
                 } catch (error) { 
                     loadingBox.style.display = 'none';
-                    addMessage("⚠️ فشل الاتصال بالسيرفر! ربما تخطى Vercel مهلة الـ 10 ثوانٍ المتاحة لتوليد الشارت.", "ai", "error"); 
+                    addMessage("⚠️ فشل الاتصال بالسيرفر!", "ai", "error"); 
                 }
             }
 
@@ -306,22 +375,21 @@ app.get('/', (req, res) => {
                 if (fullText.includes('\\n\\n')) {
                     parts = fullText.split('\\n\\n').filter(p => p.trim() !== '');
                 } else {
-                    let text = fullText;
-                    while (text.length > 0) {
-                        if (text.length <= 250) {
-                            parts.push(text);
-                            break;
-                        }
-                        let chunk = text.slice(0, 250);
-                        let lastSpace = chunk.lastIndexOf(' ');
-                        
-                        if (lastSpace > 150) {
-                            parts.push(text.slice(0, lastSpace).trim());
-                            text = text.slice(lastSpace).trim();
-                        } else {
-                            parts.push(chunk.trim());
-                            text = text.slice(250).trim();
-                        }
+                    const regex = /([^.؟!?]+[.؟!?]+)/g;
+                    const matches = fullText.match(regex);
+                    
+                    if (matches) {
+                        let tempChunk = '';
+                        matches.forEach(match => {
+                            tempChunk += match;
+                            if (tempChunk.length > 200) {
+                                parts.push(tempChunk.trim());
+                                tempChunk = '';
+                            }
+                        });
+                        if (tempChunk.trim()) parts.push(tempChunk.trim());
+                    } else {
+                        parts.push(fullText);
                     }
                 }
 
@@ -330,46 +398,81 @@ app.get('/', (req, res) => {
                 });
             }
 
+            // توليد نص الملخص
+            function generateLogText() {
+                const messages = document.querySelectorAll('.message-wrapper');
+                let log = "--- NayroVex Terminal Chat Summary ---\\n\\n";
+                messages.forEach(msg => {
+                    const role = msg.classList.contains('user') ? "المستخدم" : "NayroVex";
+                    const text = msg.querySelector('.msg-box span').innerText;
+                    log += \`[\${role}]: \${text}\\n\\n\`;
+                });
+                return log;
+            }
+
+            // فتح نافذة المعاينة
+            function openSummaryModal() {
+                const modal = document.getElementById('summaryModal');
+                const modalBody = document.getElementById('modalBodyText');
+                modalBody.innerText = generateLogText();
+                modal.style.display = 'flex';
+            }
+
+            function closeSummaryModal() {
+                document.getElementById('summaryModal').style.display = 'none';
+            }
+
+            // تنزيل الملف
+            function downloadChatHistory() {
+                const log = generateLogText();
+                const blob = new Blob([log], { type: 'text/plain;charset=utf-8' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'nayrovex_summary.txt';
+                link.click();
+                closeSummaryModal();
+            }
+
+            // حذف كل الجلسة من السيرفر ومن الواجهة
+            async function clearFullSession() {
+                if(!confirm("هل أنت متأكد من رغبتك في مسح كل سجل الجلسة؟")) return;
+                
+                try {
+                    await fetch('/api/clear', { method: 'POST' });
+                } catch (e) { console.error(e); }
+
+                document.getElementById('chat-messages').innerHTML = '';
+                lastUserRequest = { prompt: '', image: null };
+                addMessage("تم مسح الجلسة، وبدء محادثة جديدة.", "ai", "success");
+            }
+
             document.getElementById('user-chat-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessageToAI(); });
             
             document.getElementById('analyzeBtn').addEventListener('click', async () => {
                 const symbol = document.getElementById('symbolInput').value.trim();
                 if(!symbol) return alert('أدخل رمز العملة!');
-                addMessage(\`ما هو تحليلك لعملة \${symbol}؟\`, "user");
-                sendMessageToAIThroughAPI(\`أعطني تحليلاً لعملة \${symbol} كمتداول محترف.\`);
-            });
-            
-            async function sendMessageToAIThroughAPI(customText) {
-                const loadingBox = document.getElementById('typing-box');
-                const typingText = document.getElementById('typing-text');
+                const prompt = \`أعطني تحليلاً لعملة \${symbol} كمتداول محترف.\`;
                 
-                typingText.innerText = "جاري التفكير وصياغة الرد";
-                loadingBox.style.display = 'block';
-                scrollToBottom();
-
-                try {
-                    const response = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ prompt: customText })
-                    });
-                    const data = await response.json();
-                    loadingBox.style.display = 'none';
-                    
-                    if (data.error) {
-                        simulateMultipleBubbles(data.reply, "error");
-                    } else {
-                        simulateMultipleBubbles(data.reply, "success");
-                    }
-                } catch (error) { 
-                    loadingBox.style.display = 'none';
-                    addMessage("⚠️ فشل الاتصال!", "ai", "error"); 
-                }
-            }
+                lastUserRequest = { prompt: prompt, image: null };
+                
+                addMessage(\`ما هو تحليلك لعملة \${symbol}؟\`, "user");
+                executeFetchAI(prompt);
+            });
         </script>
     </body>
     </html>
     `);
+});
+
+// إضافة مسار خاص لحذف جلسة الـ IP
+app.post('/api/clear', (req, res) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    const userIP = forwarded ? forwarded.split(',')[0].trim() : req.socket.remoteAddress;
+    
+    if (sessions[userIP]) {
+        delete sessions[userIP];
+    }
+    res.json({ success: true });
 });
 
 app.post('/api/chat', async (req, res) => {
@@ -387,7 +490,6 @@ app.post('/api/chat', async (req, res) => {
         const history = sessions[userIP].history;
 
         history.push({ role: "user", text: userMessage || "أرسل صورة" });
-        // تقليص الذاكرة لتسريع الإجابة وتجنب مهلة Vercel
         if (history.length > 6) sessions[userIP].history = history.slice(-6);
 
         const conversation = sessions[userIP].history
