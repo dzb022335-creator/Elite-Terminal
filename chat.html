@@ -15,8 +15,70 @@
     <div style="display: flex; gap: 10px;">
         <input type="text" id="user-chat-input" placeholder="اكتب رسالتك هنا..." style="flex: 1; background: #1a1a24; border: 1px solid #0055ff; color: #fff; padding: 12px; border-radius: 8px; outline: none; font-size: 13px; text-align: right;" onkeypress="if(event.key === 'Enter') sendMessageToAI()">
         
-        <button onclick="sendMessageToAI()" style="background: #00d2ff; color: #000; border: none; padding: 0 20px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; transition: 0.3s;" onmouseover="this.style.background='#00bfff'" onmouseout="this.style.background='#00d2ff'">
+        <button id="send-btn" onclick="sendMessageToAI()" style="background: #00d2ff; color: #000; border: none; padding: 0 20px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; transition: 0.3s;" onmouseover="this.style.background='#00bfff'" onmouseout="this.style.background='#00d2ff'">
             إرسال
         </button>
     </div>
 </div>
+
+<script>
+async function sendMessageToAI() {
+    const inputField = document.getElementById('user-chat-input');
+    const messageContainer = document.getElementById('chat-messages');
+    const sendBtn = document.getElementById('send-btn');
+    const userMessage = inputField.value.trim();
+
+    if (!userMessage) return;
+
+    // 1. عرض رسالة المستخدم في الشات
+    messageContainer.innerHTML += `
+        <div style="align-self: flex-end; background: #0055ff; color: #fff; padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; text-align: right;">
+            ${userMessage}
+        </div>
+    `;
+    
+    inputField.value = '';
+    messageContainer.scrollTop = messageContainer.scrollHeight;
+
+    // 2. تجميد زر الإرسال مؤقتاً
+    sendBtn.disabled = true;
+    sendBtn.innerText = 'انتظر...';
+
+    try {
+        // 3. الاتصال بملف chat.js في مجلد api
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ prompt: userMessage })
+        });
+
+        const data = await response.json();
+
+        // 4. عرض رد الذكاء الاصطناعي
+        if (data.reply) {
+            messageContainer.innerHTML += `
+                <div style="align-self: flex-start; background: #1a1a24; color: #00d2ff; padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; text-align: right; border-left: 3px solid #0055ff; line-height: 1.5;">
+                    ${data.reply}
+                </div>
+            `;
+        } else {
+            throw new Error(data.error || 'خطأ غير معروف');
+        }
+
+    } catch (error) {
+        console.error(error);
+        messageContainer.innerHTML += `
+            <div style="align-self: center; background: #ff4444; color: #fff; padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 13px; text-align: center;">
+                 حدث خطأ! قد تكون المهلة انتهت أو السيرفر غير مستقر.
+            </div>
+        `;
+    }
+
+    // 5. إعادة تفعيل زر الإرسال
+    sendBtn.disabled = false;
+    sendBtn.innerText = 'إرسال';
+    messageContainer.scrollTop = messageContainer.scrollHeight;
+}
+</script>
