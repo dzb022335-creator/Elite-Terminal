@@ -1,7 +1,7 @@
-import { GoogleGenAI } from '@google/genai';
+import GoogleGenAI from '@google/genai';
 
 export default async function handler(req, res) {
-    // تفعيل الـ CORS للسماح بالطلبات من الواجهة
+    // تفعيل الـ CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -34,7 +34,6 @@ export default async function handler(req, res) {
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                // أمر صارم لجعل الردود سريعة جداً لتفادي مهلة الـ 10 ثوانٍ في Vercel
                 systemInstruction: "أنت خبير تداول ذكي ومساعد في Terminal. أجب دائماً باختصار شديد ومباشر (في سطرين أو ثلاثة فقط) لتجنب بطء السيرفر.",
                 maxOutputTokens: 150,
             }
