@@ -34,8 +34,9 @@ export default async function handler(req, res) {
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                systemInstruction: "أنت خبير تداول ذكي ومساعد في Terminal. أجب دائماً باختصار شديد ومباشر (في سطرين أو ثلاثة فقط) لتجنب بطء السيرفر.",
-                maxOutputTokens: 150,
+                // تعليمات صارمة بالإيجاز لإنهاء المهمة في أقل من ثانيتين
+                systemInstruction: "أجب باختصار شديد جداً ومباشر في سطر واحد فقط أو بضع كلمات. لا تطل الشرح أبداً مهما كان السؤال لتجنب بطء السيرفر.",
+                maxOutputTokens: 50,
             }
         });
 
